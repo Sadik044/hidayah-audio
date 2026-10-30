@@ -380,9 +380,14 @@ export async function uploadAudioFile(file: File): Promise<ServiceResponse<{ pat
       };
     }
 
-    // 3. Unique path in private 'audio' bucket
+    // 3. Unique path in private 'audio' bucket strictly conforming to database check constraint:
+    // audio_path ~ '^[a-z0-9_-]+/[a-z0-9_-]+\.(mp3|m4a|aac|ogg|wav)$'
     const ext = file.name.split('.').pop()?.toLowerCase() || 'mp3';
-    const cleanName = file.name.substring(0, file.name.lastIndexOf('.')).replace(/[^a-zA-Z0-9]/g, '_');
+    const rawBase = file.name.substring(0, file.name.lastIndexOf('.')).toLowerCase();
+    const cleanName = rawBase
+      .replace(/[^a-z0-9_-]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'audio';
     const path = `episodes/${Date.now()}-${cleanName}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
@@ -394,8 +399,8 @@ export async function uploadAudioFile(file: File): Promise<ServiceResponse<{ pat
       });
 
     if (uploadError) {
-      console.error('Error uploading audio file:', uploadError.message);
-      return { data: null, error: 'অডিও ফাইল আপলোড ব্যর্থ হয়েছে: ' + uploadError.message };
+      console.error('Error uploading audio file to storage:', uploadError);
+      return { data: null, error: `অডিও ফাইল আপলোড ব্যর্থ হয়েছে: ${uploadError.message}` };
     }
 
     return { data: { path }, error: null };
@@ -650,6 +655,36 @@ export async function fetchAdminEpisodesList(seriesId?: string): Promise<Service
   }
 }
 
+/**
+ * Strictly sanitizes slug to comply with Postgres check constraint:
+ * slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+ */
+export function sanitizeSlug(slug: string, fallbackId?: string | number | null): string {
+  const cleaned = (slug || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  if (cleaned) {
+    return cleaned;
+  }
+
+  if (fallbackId !== undefined && fallbackId !== null && String(fallbackId).trim()) {
+    const fallbackCleaned = String(fallbackId)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '');
+    if (fallbackCleaned) {
+      return `episode-${fallbackCleaned}`;
+    }
+  }
+
+  return `episode-${Date.now()}`;
+}
+
 export async function createEpisode(input: {
   series_id: string;
   title: string;
@@ -661,34 +696,114 @@ export async function createEpisode(input: {
   published?: boolean;
 }): Promise<ServiceResponse<Episode>> {
   try {
-    const cleanSlug = input.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+    const cleanSlug = sanitizeSlug(input.slug, input.episode_number);
+    const audioPathClean = input.audio_path.trim().toLowerCase();
+
+    const insertPayload = {
+      series_id: input.series_id,
+      title: input.title.trim(),
+      slug: cleanSlug,
+      description: input.description?.trim() || null,
+      episode_number: input.episode_number && input.episode_number > 0 ? input.episode_number : null,
+      audio_path: audioPathClean,
+      duration:
+        input.duration !== undefined && input.duration !== null && input.duration >= 0
+          ? input.duration
+          : null,
+      published: input.published ?? false,
+    };
+
+    console.log('Inserting episode into Supabase:', insertPayload);
+
     const { data, error } = await supabase
       .from('episodes')
-      .insert({
-        series_id: input.series_id,
-        title: input.title.trim(),
-        slug: cleanSlug,
-        description: input.description?.trim() || null,
-        episode_number: input.episode_number ?? null,
-        audio_path: input.audio_path.trim(),
-        duration: input.duration ?? null,
-        published: input.published ?? false,
-      })
+      .insert(insertPayload)
       .select('*, series:series_id(*)')
       .single();
 
     if (error) {
-      console.error('Error creating episode:', error.message);
-      if (error.code === '23505') {
-        return { data: null, error: 'এই স্লাগ (slug) দিয়ে এই সিরিজে ইতিমধ্যে একটি পর্ব রয়েছে।' };
+      console.error('Supabase error creating episode:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
+
+      // Cleanup newly uploaded orphaned audio file from storage on database insert failure
+      if (input.audio_path) {
+        console.warn('Cleaning up orphaned audio file from storage:', input.audio_path);
+        const delRes = await deleteStorageFile('audio', input.audio_path);
+        if (!delRes.data) {
+          console.error('Failed to cleanup orphaned audio file:', delRes.error);
+        }
       }
-      return { data: null, error: 'নতুন পর্ব তৈরি করতে ব্যর্থ হয়েছে।' };
+
+      // Handle duplicate violations (code 23505)
+      if (error.code === '23505') {
+        if (
+          error.message.includes('episodes_series_number_key') ||
+          error.details?.includes('episode_number')
+        ) {
+          return {
+            data: null,
+            error: `এই সিরিজে ${input.episode_number} নম্বর পর্বটি ইতিমধ্যে ব্যবহৃত হয়েছে। অনুগ্রহ করে অন্য পর্ব নম্বর দিন।`,
+          };
+        }
+        if (
+          error.message.includes('episodes_series_slug_key') ||
+          error.details?.includes('slug')
+        ) {
+          return {
+            data: null,
+            error: `এই সিরিজে '${cleanSlug}' স্লাগটি (slug) ইতিমধ্যে ব্যবহৃত হয়েছে। অনুগ্রহ করে ভিন্ন স্লাগ দিন।`,
+          };
+        }
+        return { data: null, error: `একই তথ্য দিয়ে ইতিমধ্যে একটি পর্ব বিদ্যমান (${error.message})।` };
+      }
+
+      // Handle check constraint violations (code 23514)
+      if (error.code === '23514') {
+        if (error.message.includes('episodes_audio_path_format')) {
+          return {
+            data: null,
+            error:
+              'অডিও ফাইলের পাথ ফরম্যাট সঠিক নয়। শুধুমাত্র ছোট হাতের ইংরেজি বর্ণ, সংখ্যা ও এক্সটেনশন অনুমোদিত।',
+          };
+        }
+        if (error.message.includes('episodes_slug_format')) {
+          return {
+            data: null,
+            error: `স্লাগ '${cleanSlug}' ফরম্যাট সঠিক নয়। স্লাগ শুধুমাত্র ছোট হাতের ইংরেজি বর্ণ, সংখ্যা ও হাইফেন হতে পারবে।`,
+          };
+        }
+        if (error.message.includes('episodes_episode_number_check')) {
+          return { data: null, error: 'পর্বের নম্বর অবশ্যই শূন্যের চেয়ে বড় (১, ২, ৩...) হতে হবে।' };
+        }
+        if (error.message.includes('episodes_duration_check')) {
+          return { data: null, error: 'পর্বের সময়কাল শূন্য বা তার বেশি হতে হবে।' };
+        }
+        return { data: null, error: `ডেটাবেজ কনস্ট্রেইন্ট যাচাই ব্যর্থ হয়েছে: ${error.message}` };
+      }
+
+      // Handle permission / RLS errors
+      if (
+        error.code === '42501' ||
+        error.message.toLowerCase().includes('permission') ||
+        error.message.toLowerCase().includes('row-level security')
+      ) {
+        return {
+          data: null,
+          error: `অ্যাডমিন অনুমতি যাচাই ব্যর্থ হয়েছে (${error.message})। অনুগ্রহ করে আবার লগইন করুন।`,
+        };
+      }
+
+      return { data: null, error: `নতুন পর্ব তৈরি করতে ব্যর্থ হয়েছে: ${error.message}` };
     }
 
     return { data: data as Episode, error: null };
-  } catch (err) {
+  } catch (err: any) {
     console.error('Unexpected error creating episode:', err);
-    return { data: null, error: 'অপ্রত্যাশিত ত্রুটি ঘটেছে।' };
+    return { data: null, error: `অপ্রত্যাশিত ত্রুটি ঘটেছে: ${err?.message || err}` };
   }
 }
 
@@ -707,21 +822,26 @@ export async function updateEpisode(
   previousAudioPathToCleanup?: string | null
 ): Promise<ServiceResponse<Episode>> {
   try {
-    const cleanSlug = input.slug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+    const cleanSlug = sanitizeSlug(input.slug, input.episode_number);
     const updatePayload: any = {
       series_id: input.series_id,
       title: input.title.trim(),
       slug: cleanSlug,
       description: input.description?.trim() || null,
-      episode_number: input.episode_number ?? null,
-      duration: input.duration ?? null,
+      episode_number: input.episode_number && input.episode_number > 0 ? input.episode_number : null,
+      duration:
+        input.duration !== undefined && input.duration !== null && input.duration >= 0
+          ? input.duration
+          : null,
       published: input.published ?? false,
       updated_at: new Date().toISOString(),
     };
 
     if (input.audio_path) {
-      updatePayload.audio_path = input.audio_path.trim();
+      updatePayload.audio_path = input.audio_path.trim().toLowerCase();
     }
+
+    console.log('Updating episode in Supabase:', id, updatePayload);
 
     // 1. Update database record FIRST so it always references an existing valid audio file
     const { data, error } = await supabase
@@ -732,8 +852,40 @@ export async function updateEpisode(
       .single();
 
     if (error) {
-      console.error('Error updating episode:', error.message);
-      return { data: null, error: 'পর্বের তথ্য হালনাগাদ করা সম্ভব হয়নি।' };
+      console.error('Supabase error updating episode:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
+
+      if (error.code === '23505') {
+        if (
+          error.message.includes('episodes_series_number_key') ||
+          error.details?.includes('episode_number')
+        ) {
+          return {
+            data: null,
+            error: `এই সিরিজে ${input.episode_number} নম্বর পর্বটি ইতিমধ্যে ব্যবহৃত হয়েছে।`,
+          };
+        }
+        if (
+          error.message.includes('episodes_series_slug_key') ||
+          error.details?.includes('slug')
+        ) {
+          return {
+            data: null,
+            error: `এই সিরিজে '${cleanSlug}' স্লাগটি ইতিমধ্যে ব্যবহৃত হয়েছে।`,
+          };
+        }
+        return { data: null, error: `একই তথ্য দিয়ে ইতিমধ্যে একটি পর্ব বিদ্যমান (${error.message})।` };
+      }
+
+      if (error.code === '23514') {
+        return { data: null, error: `ডেটাবেজ ভ্যালিডেশন ব্যর্থ হয়েছে: ${error.message}` };
+      }
+
+      return { data: null, error: `পর্বের তথ্য হালনাগাদ করা সম্ভব হয়নি: ${error.message}` };
     }
 
     // 2. Only after DB update succeeds, clean up previous audio file from 'audio' bucket
@@ -745,9 +897,9 @@ export async function updateEpisode(
     }
 
     return { data: data as Episode, error: null };
-  } catch (err) {
+  } catch (err: any) {
     console.error('Unexpected error updating episode:', err);
-    return { data: null, error: 'অপ্রত্যাশিত ত্রুটি ঘটেছে।' };
+    return { data: null, error: `অপ্রত্যাশিত ত্রুটি ঘটেছে: ${err?.message || err}` };
   }
 }
 

@@ -29,6 +29,8 @@ import {
   deleteEpisode,
   toggleEpisodePublish,
   uploadAudioFile,
+  deleteStorageFile,
+  sanitizeSlug,
 } from '../../services/adminService';
 import { useAudioPlayer } from '../../context/AudioPlayerContext';
 import { formatDuration, toBengaliNumber } from '../../lib/utils';
@@ -80,13 +82,25 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
   // Audio preview from current player
   const { currentEpisode, isPlaying, playEpisode, togglePlay } = useAudioPlayer();
 
+  const getNextEpisodeNumber = (targetSeriesId: string): number => {
+    if (!targetSeriesId) return 1;
+    const seriesEpisodes = episodes.filter((ep) => ep.series_id === targetSeriesId);
+    const maxNum = seriesEpisodes.reduce(
+      (max, ep) => Math.max(max, ep.episode_number || 0),
+      0
+    );
+    return maxNum + 1;
+  };
+
   const openCreateModal = () => {
+    const initialSeriesId = seriesList.length > 0 ? seriesList[0].id : '';
+    const nextNum = getNextEpisodeNumber(initialSeriesId);
     setEditingEpisode(null);
-    setSeriesId(seriesList.length > 0 ? seriesList[0].id : '');
+    setSeriesId(initialSeriesId);
     setTitle('');
-    setSlug('');
+    setSlug(`episode-${nextNum}`);
     setDescription('');
-    setEpisodeNumber(String(episodes.length + 1));
+    setEpisodeNumber(String(nextNum));
     setDuration('');
     setAudioPath('');
     setSelectedFileName('');
@@ -112,22 +126,34 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
     setIsModalOpen(true);
   };
 
+  const handleSeriesChange = (newSeriesId: string) => {
+    setSeriesId(newSeriesId);
+    if (!editingEpisode) {
+      const nextNum = getNextEpisodeNumber(newSeriesId);
+      setEpisodeNumber(String(nextNum));
+      if (!title.trim() || slug.startsWith('episode-')) {
+        setSlug(`episode-${nextNum}`);
+      }
+    }
+  };
+
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setTitle(val);
     if (!editingEpisode) {
-      const generated = val
-        .toLowerCase()
-        .trim()
-        .replace(/[\s_]+/g, '-')
-        .replace(/[^\w-]/g, '');
-      setSlug(generated);
+      const cleaned = sanitizeSlug(val, episodeNumber || '1');
+      setSlug(cleaned);
     }
   };
 
   const handleAudioFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // If a previously uploaded audio was pending in this create session, clean it up
+    if (audioPath && !editingEpisode) {
+      deleteStorageFile('audio', audioPath).catch(console.error);
+    }
 
     setUploadingAudio(true);
     setUploadError(null);
@@ -159,6 +185,15 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
     setAudioPath(res.data.path);
   };
 
+  const handleCloseModal = () => {
+    if (formLoading || uploadingAudio) return;
+    // If an audio file was uploaded in this create modal but not saved, clean it up to prevent orphans
+    if (audioPath && !editingEpisode) {
+      deleteStorageFile('audio', audioPath).catch(console.error);
+    }
+    setIsModalOpen(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -170,7 +205,12 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
       setFormError('পর্বের শিরোনাম আবশ্যক।');
       return;
     }
-    if (!slug.trim()) {
+
+    const parsedEpNum = episodeNumber ? parseInt(episodeNumber, 10) : null;
+    const parsedDuration = duration ? parseInt(duration, 10) : null;
+    const cleanSlug = sanitizeSlug(slug || title, parsedEpNum);
+
+    if (!cleanSlug) {
       setFormError('পর্বের স্লাগ (slug) আবশ্যক।');
       return;
     }
@@ -179,11 +219,33 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
       return;
     }
 
+    // Client-side pre-flight duplicate checks to provide instant and crystal clear feedback
+    if (parsedEpNum && parsedEpNum > 0) {
+      const isDuplicateNum = episodes.some(
+        (ep) =>
+          ep.series_id === seriesId &&
+          ep.episode_number === parsedEpNum &&
+          ep.id !== editingEpisode?.id
+      );
+      if (isDuplicateNum) {
+        setFormError(`এই সিরিজে ${parsedEpNum} নম্বর পর্বটি ইতিমধ্যে বিদ্যমান। অনুগ্রহ করে ভিন্ন পর্ব নম্বর দিন।`);
+        return;
+      }
+    }
+
+    const isDuplicateSlug = episodes.some(
+      (ep) =>
+        ep.series_id === seriesId &&
+        ep.slug.toLowerCase() === cleanSlug.toLowerCase() &&
+        ep.id !== editingEpisode?.id
+    );
+    if (isDuplicateSlug) {
+      setFormError(`এই সিরিজে '${cleanSlug}' স্লাগটি ইতিমধ্যে ব্যবহৃত হয়েছে। অনুগ্রহ করে ভিন্ন স্লাগ দিন।`);
+      return;
+    }
+
     setFormLoading(true);
     setFormError(null);
-
-    const parsedEpNum = episodeNumber ? parseInt(episodeNumber, 10) : null;
-    const parsedDuration = duration ? parseInt(duration, 10) : null;
 
     if (editingEpisode) {
       const res = await updateEpisode(
@@ -191,17 +253,18 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
         {
           series_id: seriesId,
           title,
-          slug,
+          slug: cleanSlug,
           description,
-          episode_number: isNaN(Number(parsedEpNum)) ? null : parsedEpNum,
+          episode_number: parsedEpNum && parsedEpNum > 0 ? parsedEpNum : null,
           audio_path: audioPath,
-          duration: isNaN(Number(parsedDuration)) ? null : parsedDuration,
+          duration: parsedDuration && parsedDuration >= 0 ? parsedDuration : null,
           published,
         },
         editingEpisode.audio_path // cleanup old audio if replaced
       );
 
       if (res.error) {
+        console.error('Update episode error:', res.error);
         setFormError(res.error);
         setFormLoading(false);
         return;
@@ -211,15 +274,16 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
       const res = await createEpisode({
         series_id: seriesId,
         title,
-        slug,
+        slug: cleanSlug,
         description,
-        episode_number: isNaN(Number(parsedEpNum)) ? null : parsedEpNum,
+        episode_number: parsedEpNum && parsedEpNum > 0 ? parsedEpNum : null,
         audio_path: audioPath,
-        duration: isNaN(Number(parsedDuration)) ? null : parsedDuration,
+        duration: parsedDuration && parsedDuration >= 0 ? parsedDuration : null,
         published,
       });
 
       if (res.error) {
+        console.error('Create episode error:', res.error);
         setFormError(res.error);
         setFormLoading(false);
         return;
@@ -497,7 +561,7 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
       {/* Create / Edit Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => !formLoading && setIsModalOpen(false)}
+        onClose={handleCloseModal}
         title={editingEpisode ? 'পর্ব সম্পাদনা' : 'নতুন পর্ব আপলোড ও সংযোজন'}
         description="প্রাইভেট 'audio' বাকেটে ফাইল আপলোড করুন এবং পর্বের তথ্য পূরণ করুন"
         maxWidth="lg"
@@ -516,7 +580,7 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
             </label>
             <select
               value={seriesId}
-              onChange={(e) => setSeriesId(e.target.value)}
+              onChange={(e) => handleSeriesChange(e.target.value)}
               required
               className="w-full rounded-xl border border-sand-300 dark:border-emerald-800/60 bg-white/70 dark:bg-emerald-deep/40 px-3.5 py-2.5 text-sm text-sand-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-600"
             >
@@ -538,13 +602,18 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
               required
             />
 
-            <Input
-              label="স্লাগ (URL Slug) *"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              placeholder="introductory-lecture"
-              required
-            />
+            <div>
+              <Input
+                label="স্লাগ (URL Slug) *"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value)}
+                placeholder="introductory-lecture"
+                required
+              />
+              <p className="text-[11px] text-stone-400 dark:text-stone-500 mt-1">
+                শুধুমাত্র ছোট হাতের ইংরেজি, সংখ্যা ও হাইফেন (স্বয়ংক্রিয়ভাবে তৈরি হবে)।
+              </p>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -647,7 +716,7 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setIsModalOpen(false)}
+              onClick={handleCloseModal}
               disabled={formLoading || uploadingAudio}
             >
               বাতিল
