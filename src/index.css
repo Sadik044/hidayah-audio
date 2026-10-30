@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-bg: #FAFAF8;
+    --color-surface: #F0F1ED;
+    --color-card: #FFFFFF;
+    --color-border: #E6E7E2;
+    --color-text: #171A18;
+    --color-text-secondary: #777C77;
+    --color-accent: #176B50;
+    --color-accent-hover: #12543E;
+  }
+
+  .dark {
+    --color-bg: #101713;
+    --color-surface: #19231D;
+    --color-card: #151F19;
+    --color-border: #233128;
+    --color-text: #F3F4EF;
+    --color-text-secondary: #A4ADA6;
+    --color-accent: #48A783;
+    --color-accent-hover: #5DB895;
+  }
+
+  body {
+    font-family: "Hind Siliguri", "Noto Sans Bengali", system-ui, -apple-system, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-tap-highlight-color: transparent;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+  }
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(119, 124, 119, 0.2);
+  border-radius: 9999px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(164, 173, 166, 0.2);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(119, 124, 119, 0.4);
+}
+
+.font-arabic {
+  font-family: "Amiri", "Noto Naskh Arabic", "Traditional Arabic", serif;
+  font-feature-settings: "rlig" 1, "calt" 1;
+}

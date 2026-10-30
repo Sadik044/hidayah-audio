@@ -1,0 +1,6 @@
+project_id = "ekfkudfssepfipqtmgyq"
+
+[functions.get-audio-url]
+# Set verify_jwt = false if public listeners can request signed URLs for published content
+# Set verify_jwt = true if only authenticated users can request signed URLs
+verify_jwt = false
