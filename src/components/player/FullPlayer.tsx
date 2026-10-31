@@ -132,7 +132,7 @@ export const FullPlayer: React.FC = () => {
       </div>
 
       {/* 2. Scrollable Content Wrapper */}
-      <div className="relative z-10 w-full max-w-lg md:max-w-xl mx-auto min-h-full px-5 sm:px-6 py-4 sm:py-6 flex flex-col justify-between gap-5 sm:gap-6">
+      <div className="relative z-10 w-full max-w-lg md:max-w-xl mx-auto min-h-full px-5 sm:px-6 py-4 sm:py-6 pb-8 sm:pb-10 flex flex-col justify-between gap-5 sm:gap-6">
         {/* Step 1: Top Navigation Bar */}
         <header className="w-full flex items-center justify-between pb-1">
           <button
@@ -193,27 +193,53 @@ export const FullPlayer: React.FC = () => {
           </div>
         </div>
 
-        {/* Step 3: Episode Title & Series Title */}
-        <div className="text-center w-full px-2 space-y-1">
-          {currentEpisode.episode_number && (
-            <div className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 mb-1">
-              পর্ব {toBengaliNumber(currentEpisode.episode_number)}
-            </div>
-          )}
+        {/* Step 3: Episode Title & Series Title with Upper-Right Three-Dot Menu (⋮) */}
+        <div className="w-full px-1 sm:px-2 flex items-start justify-between gap-3">
+          {/* Episode Info (Badge, Title, Subtitle) */}
+          <div className="min-w-0 flex-1 space-y-1 text-left">
+            {currentEpisode.episode_number && (
+              <div className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 mb-0.5">
+                পর্ব {toBengaliNumber(currentEpisode.episode_number)}
+              </div>
+            )}
 
-          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight leading-snug line-clamp-2 drop-shadow-md">
-            {currentEpisode.title}
-          </h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight leading-snug line-clamp-2 drop-shadow-md">
+              {currentEpisode.title}
+            </h1>
 
-          {currentSeries && (
-            <Link
-              to={`/series/${currentSeries.id}`}
-              onClick={closeFullPlayer}
-              className="text-sm font-medium text-emerald-400 hover:text-emerald-300 truncate block transition-colors mt-0.5"
+            {currentSeries && (
+              <Link
+                to={`/series/${currentSeries.id}`}
+                onClick={closeFullPlayer}
+                className="text-sm font-medium text-emerald-400 hover:text-emerald-300 truncate block transition-colors mt-0.5"
+              >
+                {currentSeries.title}
+              </Link>
+            )}
+          </div>
+
+          {/* Three-dot vertical menu button (⋮) positioned neatly at the upper-right */}
+          <div className="relative shrink-0 pt-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                setShowMenu(!showMenu);
+                setShowQueue(false);
+              }}
+              className={`p-2.5 rounded-full transition-all active:scale-95 flex items-center justify-center backdrop-blur-md relative ${
+                showMenu || playbackRate !== 1 || sleepTimerMode !== null
+                  ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.25)]'
+                : 'bg-white/5 text-stone-300 hover:text-white hover:bg-white/10 border border-white/10'
+              }`}
+              title="প্লেব্যাক গতি ও স্লিপ টাইমার অপশন"
+              aria-label="প্লেব্যাক গতি ও স্লিপ টাইমার মেনু"
             >
-              {currentSeries.title}
-            </Link>
-          )}
+              <MoreVertical className="h-5 w-5" />
+              {(playbackRate !== 1 || sleepTimerMode !== null) && (
+                <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-stone-950 animate-pulse" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Step 4: Seekable Progress Bar with Current Time and Duration */}
@@ -338,46 +364,6 @@ export const FullPlayer: React.FC = () => {
           </button>
         </div>
 
-        {/* Step 6: Bottom Action Bar with Three-Dot Vertical Menu Button (⋮) */}
-        <div className="flex items-center justify-between gap-3 pt-1 pb-3">
-          {/* Active Settings Status Indicator Pill */}
-          <div className="flex-1 min-w-0">
-            {(playbackRate !== 1 || sleepTimerSecondsRemaining || sleepTimerMode === 'end_of_episode') ? (
-              <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 rounded-full backdrop-blur-md">
-                {playbackRate !== 1 && <span>{toBengaliNumber(playbackRate)}x গতি</span>}
-                {playbackRate !== 1 && (sleepTimerSecondsRemaining || sleepTimerMode === 'end_of_episode') && (
-                  <span className="text-emerald-500/40">·</span>
-                )}
-                {sleepTimerSecondsRemaining ? (
-                  <span className="inline-flex items-center gap-1 text-amber-300">
-                    <Clock className="h-3 w-3 text-amber-400" />
-                    {formatDuration(sleepTimerSecondsRemaining)} বাকি
-                  </span>
-                ) : sleepTimerMode === 'end_of_episode' ? (
-                  <span className="text-amber-300">পর্বের শেষে</span>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-
-          {/* Three-dot vertical menu button (⋮) */}
-          <button
-            type="button"
-            onClick={() => {
-              setShowMenu(!showMenu);
-              setShowQueue(false);
-            }}
-            className={`p-3 rounded-full transition-all active:scale-95 flex items-center justify-center backdrop-blur-md ${
-              showMenu || playbackRate !== 1 || sleepTimerMode !== null
-                ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.25)]'
-                : 'bg-white/5 text-stone-300 hover:text-white hover:bg-white/10 border border-white/10'
-            }`}
-            title="প্লেব্যাক গতি ও স্লিপ টাইমার অপশন"
-            aria-label="প্লেব্যাক গতি ও স্লিপ টাইমার মেনু"
-          >
-            <MoreVertical className="h-5 w-5" />
-          </button>
-        </div>
 
         {/* Three-Dot Menu Drawer / Bottom Sheet */}
         {showMenu && (
