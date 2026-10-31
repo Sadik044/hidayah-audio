@@ -5,9 +5,6 @@ import {
   Pause,
   SkipBack,
   SkipForward,
-  Volume2,
-  Volume1,
-  VolumeX,
   ChevronDown,
   Bookmark,
   BookmarkCheck,
@@ -19,6 +16,7 @@ import {
   X,
   AlertCircle,
   Loader2,
+  MoreVertical,
 } from 'lucide-react';
 import { useAudioPlayer } from '../../context/AudioPlayerContext';
 import { getCoverImageUrl } from '../../lib/supabase';
@@ -32,8 +30,6 @@ export const FullPlayer: React.FC = () => {
     isLoadingAudio,
     duration,
     currentTime,
-    volume,
-    isMuted,
     playbackRate,
     repeatMode,
     error,
@@ -44,8 +40,6 @@ export const FullPlayer: React.FC = () => {
     hasPrevious,
     togglePlay,
     seek,
-    setVolume,
-    toggleMute,
     setPlaybackRate,
     toggleRepeat,
     sleepTimerMode,
@@ -62,8 +56,7 @@ export const FullPlayer: React.FC = () => {
 
   // Sub-panel views inside full player
   const [showQueue, setShowQueue] = useState(false);
-  const [showSpeedSelector, setShowSpeedSelector] = useState(false);
-  const [showSleepTimer, setShowSleepTimer] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   // Dragging seekbar state
   const [isDragging, setIsDragging] = useState(false);
@@ -75,10 +68,9 @@ export const FullPlayer: React.FC = () => {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showQueue || showSpeedSelector || showSleepTimer) {
+        if (showQueue || showMenu) {
           setShowQueue(false);
-          setShowSpeedSelector(false);
-          setShowSleepTimer(false);
+          setShowMenu(false);
         } else {
           closeFullPlayer();
         }
@@ -90,7 +82,7 @@ export const FullPlayer: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFullPlayerOpen, showQueue, showSpeedSelector, showSleepTimer, closeFullPlayer, togglePlay]);
+  }, [isFullPlayerOpen, showQueue, showMenu, closeFullPlayer, togglePlay]);
 
   if (!isFullPlayerOpen || !currentEpisode) return null;
 
@@ -114,7 +106,7 @@ export const FullPlayer: React.FC = () => {
     seek(dragTime);
   };
 
-  const speedOptions = [0.75, 1, 1.25, 1.5, 2];
+  const speedOptions = [0.5, 0.75, 1, 1.25, 1.5, 2];
   const timerOptions = [5, 10, 15, 30, 45, 60];
 
   // Resolve dynamic cover URL from series
@@ -147,8 +139,7 @@ export const FullPlayer: React.FC = () => {
             type="button"
             onClick={() => {
               setShowQueue(false);
-              setShowSpeedSelector(false);
-              setShowSleepTimer(false);
+              setShowMenu(false);
               closeFullPlayer();
             }}
             className="p-2.5 rounded-full text-stone-300 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
@@ -333,8 +324,7 @@ export const FullPlayer: React.FC = () => {
             type="button"
             onClick={() => {
               setShowQueue(!showQueue);
-              setShowSpeedSelector(false);
-              setShowSleepTimer(false);
+              setShowMenu(false);
             }}
             className={`p-3 rounded-full transition-all active:scale-90 ${
               showQueue
@@ -348,185 +338,181 @@ export const FullPlayer: React.FC = () => {
           </button>
         </div>
 
-        {/* Step 6: Volume Slider */}
-        <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white/5 backdrop-blur-md border border-white/10">
-          <button
-            type="button"
-            onClick={toggleMute}
-            className="text-stone-400 hover:text-white transition-colors"
-            title={isMuted ? 'আনমিউট' : 'মিউট'}
-            aria-label={isMuted ? 'আনমিউট' : 'মিউট'}
-          >
-            {isMuted || volume === 0 ? (
-              <VolumeX className="h-4 w-4" />
-            ) : volume < 0.5 ? (
-              <Volume1 className="h-4 w-4" />
-            ) : (
-              <Volume2 className="h-4 w-4" />
-            )}
-          </button>
-
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={isMuted ? 0 : volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
-            className="w-full accent-emerald-500 cursor-pointer h-1.5 bg-white/20 rounded-full"
-            aria-label="শব্দের মাত্রা"
-          />
-
-          <span className="text-[11px] text-stone-400 tabular-nums w-8 text-right font-mono">
-            {toBengaliNumber(Math.round((isMuted ? 0 : volume) * 100))}%
-          </span>
-        </div>
-
-        {/* Step 7: Playback Speed and Sleep Timer */}
-        <div className="flex items-center justify-between gap-3 pt-0.5 pb-2">
-          {/* Playback Speed Trigger */}
-          <button
-            type="button"
-            onClick={() => {
-              setShowSpeedSelector(!showSpeedSelector);
-              setShowSleepTimer(false);
-              setShowQueue(false);
-            }}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md transition-all active:scale-95 ${
-              playbackRate !== 1 || showSpeedSelector
-                ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
-                : 'bg-white/5 text-stone-300 hover:text-white hover:bg-white/10 border border-white/10'
-            }`}
-          >
-            <Gauge className="h-3.5 w-3.5 text-emerald-400" />
-            <span>গতি: {toBengaliNumber(playbackRate)}x</span>
-          </button>
-
-          {/* Sleep Timer Trigger */}
-          <button
-            type="button"
-            onClick={() => {
-              setShowSleepTimer(!showSleepTimer);
-              setShowSpeedSelector(false);
-              setShowQueue(false);
-            }}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md transition-all active:scale-95 ${
-              sleepTimerMode !== null || showSleepTimer
-                ? 'bg-amber-500/25 text-amber-300 border border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.2)]'
-                : 'bg-white/5 text-stone-300 hover:text-white hover:bg-white/10 border border-white/10'
-            }`}
-          >
-            <Clock className="h-3.5 w-3.5 text-amber-400" />
-            <span>
-              {sleepTimerSecondsRemaining
-                ? `${formatDuration(sleepTimerSecondsRemaining)} বাকি`
-                : sleepTimerMode === 'end_of_episode'
-                ? 'পর্বের শেষে'
-                : 'স্লিপ টাইমার'}
-            </span>
-          </button>
-        </div>
-
-        {/* Drawers / Panels (Speed, Sleep Timer, Queue) */}
-
-        {/* Speed Selector Modal */}
-        {showSpeedSelector && (
-          <div className="p-4 rounded-2xl bg-stone-900/95 backdrop-blur-xl border border-white/15 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-150 shadow-2xl">
-            <div className="flex items-center justify-between text-xs font-semibold text-stone-300 border-b border-white/10 pb-2">
-              <span>প্লেব্যাক গতি নির্বাচন করুন</span>
-              <button
-                type="button"
-                onClick={() => setShowSpeedSelector(false)}
-                className="text-stone-400 hover:text-white p-1"
-                aria-label="বন্ধ করুন"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="grid grid-cols-5 gap-2">
-              {speedOptions.map((rate) => (
-                <button
-                  key={rate}
-                  type="button"
-                  onClick={() => {
-                    setPlaybackRate(rate);
-                    setShowSpeedSelector(false);
-                  }}
-                  className={`py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
-                    playbackRate === rate
-                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/50'
-                      : 'bg-white/10 text-stone-200 hover:bg-white/20'
-                  }`}
-                >
-                  {toBengaliNumber(rate)}x
-                </button>
-              ))}
-            </div>
+        {/* Step 6: Bottom Action Bar with Three-Dot Vertical Menu Button (⋮) */}
+        <div className="flex items-center justify-between gap-3 pt-1 pb-3">
+          {/* Active Settings Status Indicator Pill */}
+          <div className="flex-1 min-w-0">
+            {(playbackRate !== 1 || sleepTimerSecondsRemaining || sleepTimerMode === 'end_of_episode') ? (
+              <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-3 py-1.5 rounded-full backdrop-blur-md">
+                {playbackRate !== 1 && <span>{toBengaliNumber(playbackRate)}x গতি</span>}
+                {playbackRate !== 1 && (sleepTimerSecondsRemaining || sleepTimerMode === 'end_of_episode') && (
+                  <span className="text-emerald-500/40">·</span>
+                )}
+                {sleepTimerSecondsRemaining ? (
+                  <span className="inline-flex items-center gap-1 text-amber-300">
+                    <Clock className="h-3 w-3 text-amber-400" />
+                    {formatDuration(sleepTimerSecondsRemaining)} বাকি
+                  </span>
+                ) : sleepTimerMode === 'end_of_episode' ? (
+                  <span className="text-amber-300">পর্বের শেষে</span>
+                ) : null}
+              </div>
+            ) : null}
           </div>
-        )}
 
-        {/* Sleep Timer Modal */}
-        {showSleepTimer && (
-          <div className="p-4 rounded-2xl bg-stone-900/95 backdrop-blur-xl border border-white/15 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-150 shadow-2xl">
-            <div className="flex items-center justify-between text-xs font-semibold text-stone-300 border-b border-white/10 pb-2">
-              <span>স্লিপ টাইমার নির্ধারণ করুন</span>
-              <button
-                type="button"
-                onClick={() => setShowSleepTimer(false)}
-                className="text-stone-400 hover:text-white p-1"
-                aria-label="বন্ধ করুন"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {timerOptions.map((min) => (
-                <button
-                  key={min}
-                  type="button"
-                  onClick={() => {
-                    setSleepTimer(min);
-                    setShowSleepTimer(false);
-                  }}
-                  className={`py-2 px-2 rounded-xl text-xs font-medium transition-all active:scale-95 ${
-                    sleepTimerMode === 'minutes' && sleepTimerMinutes === min
-                      ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/50'
-                      : 'bg-white/10 text-stone-200 hover:bg-white/20'
-                  }`}
-                >
-                  {toBengaliNumber(min)} মিনিট
-                </button>
-              ))}
-            </div>
+          {/* Three-dot vertical menu button (⋮) */}
+          <button
+            type="button"
+            onClick={() => {
+              setShowMenu(!showMenu);
+              setShowQueue(false);
+            }}
+            className={`p-3 rounded-full transition-all active:scale-95 flex items-center justify-center backdrop-blur-md ${
+              showMenu || playbackRate !== 1 || sleepTimerMode !== null
+                ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.25)]'
+                : 'bg-white/5 text-stone-300 hover:text-white hover:bg-white/10 border border-white/10'
+            }`}
+            title="প্লেব্যাক গতি ও স্লিপ টাইমার অপশন"
+            aria-label="প্লেব্যাক গতি ও স্লিপ টাইমার মেনু"
+          >
+            <MoreVertical className="h-5 w-5" />
+          </button>
+        </div>
 
-            <div className="pt-1 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setSleepTimer('end_of_episode');
-                  setShowSleepTimer(false);
-                }}
-                className={`flex-1 py-2 px-3 rounded-xl text-xs font-medium transition-all active:scale-95 ${
-                  sleepTimerMode === 'end_of_episode'
-                    ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/50'
-                    : 'bg-white/10 text-stone-200 hover:bg-white/20'
-                }`}
-              >
-                বর্তমান পর্বের শেষে বন্ধ করুন
-              </button>
+        {/* Three-Dot Menu Drawer / Bottom Sheet */}
+        {showMenu && (
+          <div className="fixed inset-0 z-50 flex flex-col justify-end select-none">
+            {/* Backdrop: Tap outside to close */}
+            <div
+              className="fixed inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+              onClick={() => setShowMenu(false)}
+            />
 
-              {sleepTimerMode !== null && (
+            {/* Bottom Sheet Card */}
+            <div
+              className="relative z-10 w-full max-w-lg md:max-w-xl mx-auto bg-stone-900/98 dark:bg-[#0c1a13]/98 backdrop-blur-2xl border-t border-x border-white/15 rounded-t-3xl p-5 sm:p-6 shadow-[0_-15px_50px_rgba(0,0,0,0.8)] space-y-5 animate-in slide-in-from-bottom duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Drag Handle Bar */}
+              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto -mt-1 mb-1" />
+
+              {/* Menu Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                <div className="flex items-center gap-2">
+                  <div className="h-7 w-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                    <MoreVertical className="h-4 w-4" />
+                  </div>
+                  <h3 className="text-sm font-bold text-white tracking-wide">
+                    প্লেয়ার অপশন ও সেটিংস
+                  </h3>
+                </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    cancelSleepTimer();
-                    setShowSleepTimer(false);
-                  }}
-                  className="py-2 px-3 rounded-xl text-xs text-red-400 hover:bg-red-500/20 font-medium transition-colors"
+                  onClick={() => setShowMenu(false)}
+                  className="p-1.5 rounded-full text-stone-400 hover:text-white hover:bg-white/10 transition-colors"
+                  aria-label="বন্ধ করুন"
                 >
-                  বাতিল
+                  <X className="h-5 w-5" />
                 </button>
-              )}
+              </div>
+
+              {/* Section 1: Playback Speed */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between text-xs font-semibold text-stone-300">
+                  <span className="flex items-center gap-1.5">
+                    <Gauge className="h-3.5 w-3.5 text-emerald-400" />
+                    <span>প্লেব্যাক গতি (Playback Speed)</span>
+                  </span>
+                  <span className="text-[11px] text-emerald-400 font-mono font-medium">
+                    {toBengaliNumber(playbackRate)}x নির্বাচিত
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
+                  {speedOptions.map((rate) => {
+                    const isSelected = playbackRate === rate;
+                    return (
+                      <button
+                        key={rate}
+                        type="button"
+                        onClick={() => setPlaybackRate(rate)}
+                        className={`py-2 px-1 rounded-xl text-xs font-bold transition-all active:scale-95 text-center ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/50 ring-1 ring-emerald-400'
+                            : 'bg-white/10 text-stone-300 hover:bg-white/15 hover:text-white'
+                        }`}
+                      >
+                        {rate === 1 ? '1x' : `${rate}x`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Section 2: Sleep Timer */}
+              <div className="space-y-2.5 pt-1">
+                <div className="flex items-center justify-between text-xs font-semibold text-stone-300">
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-amber-400" />
+                    <span>স্লিপ টাইমার (Sleep Timer)</span>
+                  </span>
+                  {sleepTimerSecondsRemaining ? (
+                    <span className="text-[11px] text-amber-400 font-mono font-medium animate-pulse">
+                      {formatDuration(sleepTimerSecondsRemaining)} বাকি
+                    </span>
+                  ) : sleepTimerMode === 'end_of_episode' ? (
+                    <span className="text-[11px] text-amber-400 font-medium">
+                      বর্তমান পর্বের শেষে
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {timerOptions.map((min) => {
+                    const isSelected = sleepTimerMode === 'minutes' && sleepTimerMinutes === min;
+                    return (
+                      <button
+                        key={min}
+                        type="button"
+                        onClick={() => setSleepTimer(min)}
+                        className={`py-2.5 px-2 rounded-xl text-xs font-medium transition-all active:scale-95 text-center ${
+                          isSelected
+                            ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/50 ring-1 ring-amber-400 font-bold'
+                            : 'bg-white/10 text-stone-300 hover:bg-white/15 hover:text-white'
+                        }`}
+                      >
+                        {toBengaliNumber(min)} মিনিট
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setSleepTimer('end_of_episode')}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-medium transition-all active:scale-95 text-center ${
+                      sleepTimerMode === 'end_of_episode'
+                        ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/50 ring-1 ring-amber-400 font-bold'
+                        : 'bg-white/10 text-stone-300 hover:bg-white/15 hover:text-white'
+                    }`}
+                  >
+                    বর্তমান পর্বের শেষে
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => cancelSleepTimer()}
+                    className={`py-2.5 px-3.5 rounded-xl text-xs font-medium transition-all active:scale-95 ${
+                      sleepTimerMode === null
+                        ? 'bg-white/20 text-white font-bold ring-1 ring-white/30'
+                        : 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
+                    }`}
+                  >
+                    টাইমার বন্ধ (Timer Off)
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
