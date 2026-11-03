@@ -67,6 +67,7 @@ interface AuthContextType {
   aal: 'aal1' | 'aal2' | null;
   hasMfaEnrolled: boolean;
   loading: boolean;
+  profileError: string | null;
   signOut: (options?: { scope?: 'global' | 'local' | 'others' }) => Promise<void>;
   refreshProfile: () => Promise<void>;
   refreshMfaStatus: () => Promise<{ aal: 'aal1' | 'aal2' | null; hasMfaEnrolled: boolean }>;
@@ -82,93 +83,209 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [hasMfaEnrolled, setHasMfaEnrolled] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
-  // Keep a ref to the current user ID to track changes across async boundaries
+  // Synchronous refs for async boundaries and closures
   const activeUserIdRef = useRef<string | null>(null);
+  const profileRef = useRef<Profile | null>(null);
+  const fetchVersionRef = useRef<number>(0);
+  const isMountedRef = useRef<boolean>(true);
+
+  /**
+   * Unified helper to fetch user profile & MFA status with version tracking.
+   * Prevents race conditions and stale closure hangs.
+   */
+  const loadUserProfile = async (userId: string, version: number) => {
+    setProfileLoading(true);
+    setProfileError(null);
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      // If component unmounted or superseded by a newer fetch/auth change, discard
+      if (!isMountedRef.current || version !== fetchVersionRef.current) return;
+
+      if (error) {
+        console.error('Error fetching profile:', error.message);
+        setProfile(null);
+        profileRef.current = null;
+        setProfileError(error.message);
+        setHasMfaEnrolled(false);
+      } else if (data) {
+        const loadedProfile = data as Profile;
+        setProfile(loadedProfile);
+        profileRef.current = loadedProfile;
+        setProfileError(null);
+
+        // If admin, check enrolled MFA factors
+        if (loadedProfile.role === 'admin') {
+          try {
+            const { data: factorsData } = await supabase.auth.mfa.listFactors();
+            const verified = factorsData?.totp?.some((f) => f.status === 'verified') || false;
+            if (isMountedRef.current && version === fetchVersionRef.current) {
+              setHasMfaEnrolled(verified);
+            }
+          } catch {
+            if (isMountedRef.current && version === fetchVersionRef.current) {
+              setHasMfaEnrolled(false);
+            }
+          }
+        } else {
+          setHasMfaEnrolled(false);
+        }
+      } else {
+        setProfile(null);
+        profileRef.current = null;
+        setHasMfaEnrolled(false);
+      }
+    } catch (err) {
+      if (!isMountedRef.current || version !== fetchVersionRef.current) return;
+      console.error('Unexpected error fetching profile:', err);
+      setProfile(null);
+      profileRef.current = null;
+      setProfileError(err instanceof Error ? err.message : 'Unknown profile error');
+      setHasMfaEnrolled(false);
+    } finally {
+      if (isMountedRef.current && version === fetchVersionRef.current) {
+        setProfileLoading(false);
+      }
+    }
+  };
 
   // 1. Session initialization & synchronous auth listener
   useEffect(() => {
-    let isSubscribed = true;
+    isMountedRef.current = true;
 
-    // Get initial session
-    supabase.auth
-      .getSession()
-      .then(({ data: { session: initialSession } }) => {
-        if (!isSubscribed) return;
+    // Get initial session with deterministic 8s fallback timeout to prevent hangs
+    const getInitialSession = async () => {
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const timeoutPromise = new Promise<{ data: { session: null }; error: Error }>((resolve) => {
+          timeoutId = setTimeout(() => resolve({ data: { session: null }, error: new Error('Session timeout') }), 8000);
+        });
+
+        const { data, error } = await Promise.race([
+          supabase.auth.getSession(),
+          timeoutPromise,
+        ]);
+        if (timeoutId) clearTimeout(timeoutId);
+
+        if (!isMountedRef.current) return;
+
+        if (error && error.message !== 'Session timeout') {
+          console.error('Error getting initial session:', error);
+        }
+
+        const initialSession = data?.session ?? null;
         setSession(initialSession);
         const nextUser = initialSession?.user ?? null;
-        activeUserIdRef.current = nextUser?.id ?? null;
+        const nextUserId = nextUser?.id ?? null;
+        activeUserIdRef.current = nextUserId;
         setUser(nextUser);
         setAal(parseJwtAal(initialSession?.access_token));
 
-        if (nextUser) {
-          setProfileLoading(true);
+        if (nextUserId) {
+          const version = ++fetchVersionRef.current;
+          await loadUserProfile(nextUserId, version);
         } else {
           setProfile(null);
+          profileRef.current = null;
           setHasMfaEnrolled(false);
           setProfileLoading(false);
         }
-      })
-      .catch((err) => {
-        console.error('Error getting initial session:', err);
-        if (isSubscribed) {
+      } catch (err) {
+        console.error('Initial session fetch failed:', err);
+        if (isMountedRef.current) {
           setProfile(null);
+          profileRef.current = null;
           setAal(null);
           setHasMfaEnrolled(false);
           setProfileLoading(false);
         }
-      })
-      .finally(() => {
-        if (isSubscribed) {
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+        if (isMountedRef.current) {
           setSessionLoading(false);
         }
-      });
+      }
+    };
 
-    // Listen to auth changes - strictly synchronous callback
+    getInitialSession();
+
+    // Listen to auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      if (!isSubscribed) return;
-      setSession(currentSession);
+    } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+      if (!isMountedRef.current) return;
+
       const nextUser = currentSession?.user ?? null;
       const nextUserId = nextUser?.id ?? null;
       const previousUserId = activeUserIdRef.current;
-      activeUserIdRef.current = nextUserId;
-      setUser(nextUser);
-      setAal(parseJwtAal(currentSession?.access_token));
+      const currentAal = parseJwtAal(currentSession?.access_token);
 
-      if (nextUserId) {
-        if (nextUserId !== previousUserId || !profile) {
-          setProfileLoading(true);
-        }
-        if (previousUserId && nextUserId !== previousUserId) {
-          broadcastAuthSignal({ type: 'USER_CHANGED', userId: nextUserId, timestamp: Date.now() });
-        }
-      } else {
-        if (previousUserId) {
-          broadcastAuthSignal({ type: 'SIGNED_OUT', timestamp: Date.now() });
-        }
+      setSession(currentSession);
+      setUser(nextUser);
+      setAal(currentAal);
+
+      if (!nextUserId) {
+        // User logged out
+        activeUserIdRef.current = null;
+        profileRef.current = null;
         setProfile(null);
         setAal(null);
         setHasMfaEnrolled(false);
         setProfileLoading(false);
+        setProfileError(null);
+        setSessionLoading(false);
+
+        if (previousUserId) {
+          broadcastAuthSignal({ type: 'SIGNED_OUT', timestamp: Date.now() });
+        }
+        return;
       }
+
+      // User is authenticated
+      if (nextUserId !== previousUserId) {
+        // User changed or new login
+        activeUserIdRef.current = nextUserId;
+        if (previousUserId) {
+          broadcastAuthSignal({ type: 'USER_CHANGED', userId: nextUserId, timestamp: Date.now() });
+        }
+        const version = ++fetchVersionRef.current;
+        await loadUserProfile(nextUserId, version);
+      } else {
+        // SAME USER: e.g. TOKEN_REFRESHED, USER_UPDATED, MFA_CHALLENGE_VERIFIED
+        if (event === 'MFA_CHALLENGE_VERIFIED' || currentAal === 'aal2') {
+          setHasMfaEnrolled(true);
+        }
+        // If profile is missing (e.g. earlier network failure), attempt to fetch it now
+        if (!profileRef.current) {
+          const version = ++fetchVersionRef.current;
+          await loadUserProfile(nextUserId, version);
+        }
+        // Note: If profile is already in memory, background token refresh executes silently
+        // without setting profileLoading=true or interrupting active views.
+      }
+
       setSessionLoading(false);
     });
 
     return () => {
-      isSubscribed = false;
+      isMountedRef.current = false;
       subscription.unsubscribe();
     };
   }, []);
 
   // 2. Cross-tab session synchronization listener
   useEffect(() => {
-    let isSubscribed = true;
     let channel: BroadcastChannel | null = null;
 
     const handleSyncSignal = (signal: unknown) => {
-      if (!isSubscribed || !signal || typeof signal !== 'object') return;
+      if (!isMountedRef.current || !signal || typeof signal !== 'object') return;
       const { type, userId, timestamp } = signal as Partial<AuthSyncSignal>;
 
       // Ignore expired signals older than 60 seconds
@@ -180,13 +297,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Tab B promptly reflects signed-out state when Tab A signs out
         if (activeUserIdRef.current !== null || user !== null) {
           activeUserIdRef.current = null;
+          profileRef.current = null;
           setUser(null);
           setSession(null);
           setProfile(null);
           setAal(null);
           setHasMfaEnrolled(false);
           setProfileLoading(false);
-          // Note: Avoid duplicate supabase.auth.signOut() to prevent infinite network loops
+          setProfileError(null);
         }
       } else if (type === 'USER_CHANGED') {
         // Account switched in another tab
@@ -194,12 +312,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           supabase.auth
             .getSession()
             .then(({ data: { session: newSession } }) => {
-              if (!isSubscribed) return;
+              if (!isMountedRef.current) return;
               setSession(newSession);
               const nextUser = newSession?.user ?? null;
               activeUserIdRef.current = nextUser?.id ?? null;
               setUser(nextUser);
               setAal(parseJwtAal(newSession?.access_token));
+              if (nextUser?.id) {
+                const version = ++fetchVersionRef.current;
+                loadUserProfile(nextUser.id, version);
+              }
             })
             .catch(() => {});
         }
@@ -220,7 +342,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Storage event listener fallback (handles browsers without BroadcastChannel or manual storage clearance)
     const handleStorageEvent = (event: StorageEvent) => {
-      if (!isSubscribed) return;
+      if (!isMountedRef.current) return;
 
       if (event.key === AUTH_SYNC_STORAGE_KEY && event.newValue) {
         try {
@@ -247,7 +369,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.addEventListener('storage', handleStorageEvent);
 
     return () => {
-      isSubscribed = false;
       if (channel) {
         try {
           channel.close();
@@ -258,72 +379,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       window.removeEventListener('storage', handleStorageEvent);
     };
   }, [user]);
-
-  // 3. Fetch profile & check MFA factors in a separate useEffect triggered strictly by user?.id
-  useEffect(() => {
-    let isCurrent = true;
-    const userId = user?.id;
-
-    if (!userId) {
-      setProfile(null);
-      setAal(null);
-      setHasMfaEnrolled(false);
-      setProfileLoading(false);
-      return;
-    }
-
-    const loadProfileAndMfa = async () => {
-      setProfileLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .maybeSingle();
-
-        if (!isCurrent) return;
-
-        if (!error && data) {
-          const loadedProfile = data as Profile;
-          setProfile(loadedProfile);
-
-          // If admin, check enrolled MFA factors
-          if (loadedProfile.role === 'admin') {
-            try {
-              const { data: factorsData } = await supabase.auth.mfa.listFactors();
-              const verified = factorsData?.totp?.some((f) => f.status === 'verified') || false;
-              if (isCurrent) {
-                setHasMfaEnrolled(verified);
-              }
-            } catch {
-              if (isCurrent) setHasMfaEnrolled(false);
-            }
-          }
-        } else {
-          if (error) {
-            console.error('Error fetching profile:', error.message);
-          }
-          setProfile(null);
-          setHasMfaEnrolled(false);
-        }
-      } catch (err) {
-        if (!isCurrent) return;
-        console.error('Unexpected error fetching profile:', err);
-        setProfile(null);
-        setHasMfaEnrolled(false);
-      } finally {
-        if (isCurrent) {
-          setProfileLoading(false);
-        }
-      }
-    };
-
-    loadProfileAndMfa();
-
-    return () => {
-      isCurrent = false;
-    };
-  }, [user?.id]);
 
   const signOut = async (options?: { scope?: 'global' | 'local' | 'others' }) => {
     // Broadcast the sign-out event to synchronize across all browser tabs immediately
@@ -342,43 +397,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw err;
     } finally {
       activeUserIdRef.current = null;
+      profileRef.current = null;
       setUser(null);
       setSession(null);
       setProfile(null);
       setAal(null);
       setHasMfaEnrolled(false);
       setProfileLoading(false);
+      setProfileError(null);
     }
   };
 
   const refreshProfile = async () => {
-    const currentId = user?.id;
+    const currentId = activeUserIdRef.current;
     if (!currentId) return;
-    try {
-      setProfileLoading(true);
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', currentId)
-        .maybeSingle();
-
-      if (activeUserIdRef.current === currentId) {
-        if (!error && data) {
-          setProfile(data as Profile);
-        } else {
-          setProfile(null);
-        }
-      }
-    } catch (err) {
-      console.error('Error refreshing profile:', err);
-      if (activeUserIdRef.current === currentId) {
-        setProfile(null);
-      }
-    } finally {
-      if (activeUserIdRef.current === currentId) {
-        setProfileLoading(false);
-      }
-    }
+    const version = ++fetchVersionRef.current;
+    await loadUserProfile(currentId, version);
   };
 
   const refreshMfaStatus = async () => {
@@ -409,11 +443,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       aal,
       hasMfaEnrolled,
       loading,
+      profileError,
       signOut,
       refreshProfile,
       refreshMfaStatus,
     }),
-    [user, session, profile, isAdmin, aal, hasMfaEnrolled, loading]
+    [user, session, profile, isAdmin, aal, hasMfaEnrolled, loading, profileError]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
