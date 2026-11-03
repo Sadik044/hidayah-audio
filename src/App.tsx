@@ -4,19 +4,27 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { AudioPlayerProvider } from './context/AudioPlayerContext';
 import { AppShell } from './components/layout/AppShell';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 
-import { Home } from './pages/Home';
-import { Browse } from './pages/Browse';
-import { SeriesDetails } from './pages/SeriesDetails';
-import { EpisodeDetails } from './pages/EpisodeDetails';
-import { Search } from './pages/Search';
-import { Favorites } from './pages/Favorites';
-import { RecentlyPlayed } from './pages/RecentlyPlayed';
-import { NotFound } from './pages/NotFound';
+// Lazy load public pages for optimal initial bundle transfer
+const Home = lazy(() => import('./pages/Home').then((m) => ({ default: m.Home })));
+const Browse = lazy(() => import('./pages/Browse').then((m) => ({ default: m.Browse })));
+const SeriesDetails = lazy(() => import('./pages/SeriesDetails').then((m) => ({ default: m.SeriesDetails })));
+const EpisodeDetails = lazy(() => import('./pages/EpisodeDetails').then((m) => ({ default: m.EpisodeDetails })));
+const Search = lazy(() => import('./pages/Search').then((m) => ({ default: m.Search })));
+const Favorites = lazy(() => import('./pages/Favorites').then((m) => ({ default: m.Favorites })));
+const RecentlyPlayed = lazy(() => import('./pages/RecentlyPlayed').then((m) => ({ default: m.RecentlyPlayed })));
+const NotFound = lazy(() => import('./pages/NotFound').then((m) => ({ default: m.NotFound })));
 
 // Lazy load admin pages to keep the public bundle ultra lightweight
 const AdminLogin = lazy(() =>
   import('./pages/admin/AdminLogin').then((m) => ({ default: m.AdminLogin }))
+);
+const AdminMfaSetup = lazy(() =>
+  import('./pages/admin/AdminMfaSetup').then((m) => ({ default: m.AdminMfaSetup }))
+);
+const AdminMfaChallenge = lazy(() =>
+  import('./pages/admin/AdminMfaChallenge').then((m) => ({ default: m.AdminMfaChallenge }))
 );
 const AdminDashboard = lazy(() =>
   import('./pages/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard }))
@@ -56,11 +64,33 @@ export function App() {
                   }
                 />
                 <Route
+                  path="/admin/mfa-setup"
+                  element={
+                    <ProtectedRoute requireAal2={false}>
+                      <Suspense fallback={<PageLoader />}>
+                        <AdminMfaSetup />
+                      </Suspense>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/mfa"
+                  element={
+                    <ProtectedRoute requireAal2={false}>
+                      <Suspense fallback={<PageLoader />}>
+                        <AdminMfaChallenge />
+                      </Suspense>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/admin"
                   element={
-                    <Suspense fallback={<PageLoader />}>
-                      <AdminDashboard />
-                    </Suspense>
+                    <ProtectedRoute requireAal2={true}>
+                      <Suspense fallback={<PageLoader />}>
+                        <AdminDashboard />
+                      </Suspense>
+                    </ProtectedRoute>
                   }
                 />
 

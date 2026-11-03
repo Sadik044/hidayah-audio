@@ -31,9 +31,6 @@ export const Footer: React.FC = () => {
           <Link to="/favorites" className="hover:text-[#171A18] dark:hover:text-[#F3F4EF] transition-colors">
             পছন্দ
           </Link>
-          <Link to="/admin/login" className="hover:text-[#171A18] dark:hover:text-[#F3F4EF] transition-colors">
-            অ্যাডমিন
-          </Link>
         </div>
 
         {/* Copyright */}

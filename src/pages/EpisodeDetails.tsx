@@ -57,8 +57,10 @@ export const EpisodeDetails: React.FC = () => {
         setSeries(epData.series || null);
 
         // Fetch sibling episodes for seamless queue playback
+        // Since fetchEpisodeById already cryptographically verified parent series publication,
+        // we skip the redundant series query to eliminate sequential waterfall
         if (epData.series_id) {
-          const epRes = await fetchSeriesEpisodes(epData.series_id);
+          const epRes = await fetchSeriesEpisodes(epData.series_id, { skipSeriesVerification: true });
           if (epRes.data) {
             setSeriesEpisodes(epRes.data);
           }

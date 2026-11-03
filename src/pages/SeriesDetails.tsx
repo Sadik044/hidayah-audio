@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   Play,
@@ -26,6 +26,133 @@ import { useAudioPlayer } from '../context/AudioPlayerContext';
 import { formatDuration, toBengaliNumber } from '../lib/utils';
 import type { Series, Episode } from '../types/database.types';
 
+interface EpisodeRowProps {
+  episode: Episode;
+  orderNumber: number;
+  isCurrent: boolean;
+  isPlayingThis: boolean;
+  isLoadingThis: boolean;
+  isFav: boolean;
+  coverUrl: string;
+  onPlay: (ep: Episode) => void;
+  onToggleFavorite: (id: string) => void;
+}
+
+const EpisodeRow = React.memo<EpisodeRowProps>(({
+  episode,
+  orderNumber,
+  isCurrent,
+  isPlayingThis,
+  isLoadingThis,
+  isFav,
+  coverUrl,
+  onPlay,
+  onToggleFavorite,
+}) => {
+  return (
+    <div
+      className={`group flex items-center justify-between gap-3 p-2.5 sm:p-3 rounded-xl transition-all border ${
+        isCurrent
+          ? 'bg-[#FFFFFF] dark:bg-[#14221A] border-l-4 border-l-[#176B50] dark:border-l-[#54B58B] border-[#EAEAE5] dark:border-[#26372D] shadow-sm'
+          : 'border-transparent hover:bg-[#FFFFFF]/90 dark:hover:bg-[#14221A]/80 hover:border-[#EAEAE5]/60 dark:hover:border-[#26372D]/60'
+      }`}
+    >
+      {/* Left: Play/Pause Button, Number & Thumbnail */}
+      <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+        {/* Play/Pause Button */}
+        <button
+          type="button"
+          onClick={() => onPlay(episode)}
+          disabled={isLoadingThis}
+          className={`h-9 w-9 shrink-0 rounded-full flex items-center justify-center transition-transform active:scale-95 ${
+            isCurrent
+              ? 'bg-[#176B50] text-white dark:bg-[#54B58B] dark:text-[#0D1712] shadow-sm'
+              : 'bg-[#FAF9F6] dark:bg-[#1A2820] text-[#777D78] dark:text-[#A8B2AA] hover:bg-[#176B50] hover:text-white dark:hover:bg-[#54B58B] dark:hover:text-[#0D1712]'
+          }`}
+          aria-label={isPlayingThis ? 'বিরতি দিন' : 'চালান'}
+          title={isPlayingThis ? 'বিরতি দিন' : 'চালান'}
+        >
+          {isLoadingThis ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : isPlayingThis ? (
+            <Pause className="h-4 w-4 fill-current" />
+          ) : (
+            <Play className="h-4 w-4 fill-current ml-0.5" />
+          )}
+        </button>
+
+        {/* Episode Order Number */}
+        <span className="hidden sm:inline-block text-xs font-mono text-[#777D78] dark:text-[#A8B2AA] w-6 text-center shrink-0">
+          {isPlayingThis ? (
+            <Volume2 className="h-3.5 w-3.5 text-[#176B50] dark:text-[#54B58B] animate-pulse mx-auto" />
+          ) : (
+            toBengaliNumber(orderNumber)
+          )}
+        </span>
+
+        {/* Small Square Artwork */}
+        <div className="w-11 h-11 sm:w-12 sm:h-12 aspect-square rounded-lg overflow-hidden bg-[#FAF9F6] dark:bg-[#1A2820] border border-[#EAEAE5] dark:border-[#26372D] shrink-0">
+          <img
+            src={coverUrl}
+            alt=""
+            aria-hidden="true"
+            className="w-full h-full object-cover select-none"
+            loading="lazy"
+          />
+        </div>
+
+        {/* Episode Title & Description */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/episodes/${episode.id}`}
+              className={`text-sm sm:text-base font-medium truncate block transition-colors ${
+                isCurrent
+                  ? 'text-[#176B50] dark:text-[#54B58B] font-semibold'
+                  : 'text-[#191D1A] dark:text-[#F2F4EF] hover:text-[#176B50] dark:hover:text-[#54B58B]'
+              }`}
+              title={episode.title}
+            >
+              {episode.title}
+            </Link>
+          </div>
+
+          {episode.description && (
+            <p className="text-xs text-[#777D78] dark:text-[#A8B2AA] line-clamp-1 mt-0.5">
+              {episode.description}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Right: Duration & Bookmark Action */}
+      <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+        {episode.duration && episode.duration > 0 ? (
+          <span className="tabular-nums font-mono text-xs text-[#777D78] dark:text-[#A8B2AA] flex items-center gap-1">
+            <Clock className="h-3 w-3 sm:inline-block hidden" />
+            {formatDuration(episode.duration)}
+          </span>
+        ) : null}
+
+        {/* Favorite / Bookmark toggle */}
+        <button
+          type="button"
+          onClick={() => onToggleFavorite(episode.id)}
+          className="p-1.5 rounded-lg text-[#777D78] hover:text-[#176B50] dark:text-[#A8B2AA] dark:hover:text-[#54B58B] hover:bg-[#FAF9F6] dark:hover:bg-[#1A2820] transition-colors"
+          title={isFav ? 'পছন্দ তালিকা থেকে সরান' : 'পছন্দ তালিকায় যুক্ত করুন'}
+          aria-label={isFav ? 'পছন্দ তালিকা থেকে সরান' : 'পছন্দ তালিকায় যুক্ত করুন'}
+        >
+          {isFav ? (
+            <BookmarkCheck className="h-4 w-4 text-[#176B50] dark:text-[#54B58B] fill-current" />
+          ) : (
+            <Bookmark className="h-4 w-4" />
+          )}
+        </button>
+      </div>
+    </div>
+  );
+});
+
 export const SeriesDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const [series, setSeries] = useState<Series | null>(null);
@@ -52,21 +179,25 @@ export const SeriesDetails: React.FC = () => {
       setError(null);
 
       try {
-        const [sRes, epRes] = await Promise.all([
-          fetchSeriesById(id),
-          fetchSeriesEpisodes(id),
-        ]);
+        // Step 1: Strictly verify that the series exists and is published first
+        const sRes = await fetchSeriesById(id);
 
         if (sRes.error || !sRes.data) {
           setError(sRes.error || 'অনুরোধকৃত সিরিজটি খুঁজে পাওয়া যায়নি অথবা এটি বর্তমানে অপ্রকাশিত।');
           setSeries(null);
-        } else {
-          setSeries(sRes.data);
+          setEpisodes([]);
+          return;
         }
 
+        setSeries(sRes.data);
+
+        // Step 2: Now that parent series publication is proven, load published episodes
+        const epRes = await fetchSeriesEpisodes(id, { skipSeriesVerification: true });
         setEpisodes(epRes.data || []);
       } catch {
         setError('সিরিজের তথ্য লোড করতে সমস্যা হয়েছে। অনুগ্রহ করে পুনরায় চেষ্টা করুন।');
+        setSeries(null);
+        setEpisodes([]);
       } finally {
         setLoading(false);
       }
@@ -120,13 +251,13 @@ export const SeriesDetails: React.FC = () => {
     }
   };
 
-  const handlePlayEpisode = (episode: Episode) => {
+  const handlePlayEpisode = useCallback((episode: Episode) => {
     if (currentEpisode?.id === episode.id) {
       togglePlay();
     } else {
       playEpisode(episode, series, episodes);
     }
-  };
+  }, [currentEpisode?.id, togglePlay, playEpisode, series, episodes]);
 
   const handleShare = async () => {
     try {
@@ -431,116 +562,20 @@ export const SeriesDetails: React.FC = () => {
 
         {episodes.length > 0 ? (
           <div className="space-y-1.5">
-            {episodes.map((ep, idx) => {
-              const isCurrent = currentEpisode?.id === ep.id;
-              const isPlayingThis = isCurrent && isPlaying;
-              const isLoadingThis = isCurrent && isLoadingAudio;
-              const isFav = isFavorite(ep.id);
-
-              return (
-                <div
-                  key={ep.id}
-                  className={`group flex items-center justify-between gap-3 p-2.5 sm:p-3 rounded-xl transition-all border ${
-                    isCurrent
-                      ? 'bg-[#FFFFFF] dark:bg-[#14221A] border-l-4 border-l-[#176B50] dark:border-l-[#54B58B] border-[#EAEAE5] dark:border-[#26372D] shadow-sm'
-                      : 'border-transparent hover:bg-[#FFFFFF]/90 dark:hover:bg-[#14221A]/80 hover:border-[#EAEAE5]/60 dark:hover:border-[#26372D]/60'
-                  }`}
-                >
-                  {/* Left: Play/Pause Button, Number & Thumbnail */}
-                  <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-                    {/* Play/Pause Button */}
-                    <button
-                      type="button"
-                      onClick={() => handlePlayEpisode(ep)}
-                      disabled={isLoadingThis}
-                      className={`h-9 w-9 shrink-0 rounded-full flex items-center justify-center transition-transform active:scale-95 ${
-                        isCurrent
-                          ? 'bg-[#176B50] text-white dark:bg-[#54B58B] dark:text-[#0D1712] shadow-sm'
-                          : 'bg-[#FAF9F6] dark:bg-[#1A2820] text-[#777D78] dark:text-[#A8B2AA] hover:bg-[#176B50] hover:text-white dark:hover:bg-[#54B58B] dark:hover:text-[#0D1712]'
-                      }`}
-                      aria-label={isPlayingThis ? 'বিরতি দিন' : 'চালান'}
-                      title={isPlayingThis ? 'বিরতি দিন' : 'চালান'}
-                    >
-                      {isLoadingThis ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : isPlayingThis ? (
-                        <Pause className="h-4 w-4 fill-current" />
-                      ) : (
-                        <Play className="h-4 w-4 fill-current ml-0.5" />
-                      )}
-                    </button>
-
-                    {/* Episode Order Number */}
-                    <span className="hidden sm:inline-block text-xs font-mono text-[#777D78] dark:text-[#A8B2AA] w-6 text-center shrink-0">
-                      {isPlayingThis ? (
-                        <Volume2 className="h-3.5 w-3.5 text-[#176B50] dark:text-[#54B58B] animate-pulse mx-auto" />
-                      ) : (
-                        toBengaliNumber(ep.episode_number || idx + 1)
-                      )}
-                    </span>
-
-                    {/* Small Square Artwork */}
-                    <div className="w-11 h-11 sm:w-12 sm:h-12 aspect-square rounded-lg overflow-hidden bg-[#FAF9F6] dark:bg-[#1A2820] border border-[#EAEAE5] dark:border-[#26372D] shrink-0">
-                      <img
-                        src={coverUrl}
-                        alt=""
-                        aria-hidden="true"
-                        className="w-full h-full object-cover select-none"
-                        loading="lazy"
-                      />
-                    </div>
-
-                    {/* Episode Title & Description */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <Link
-                          to={`/episodes/${ep.id}`}
-                          className={`text-sm sm:text-base font-medium truncate block transition-colors ${
-                            isCurrent
-                              ? 'text-[#176B50] dark:text-[#54B58B] font-semibold'
-                              : 'text-[#191D1A] dark:text-[#F2F4EF] hover:text-[#176B50] dark:hover:text-[#54B58B]'
-                          }`}
-                          title={ep.title}
-                        >
-                          {ep.title}
-                        </Link>
-                      </div>
-
-                      {ep.description && (
-                        <p className="text-xs text-[#777D78] dark:text-[#A8B2AA] line-clamp-1 mt-0.5">
-                          {ep.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Right: Duration & Bookmark Action */}
-                  <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-                    {ep.duration && ep.duration > 0 ? (
-                      <span className="tabular-nums font-mono text-xs text-[#777D78] dark:text-[#A8B2AA] flex items-center gap-1">
-                        <Clock className="h-3 w-3 sm:inline-block hidden" />
-                        {formatDuration(ep.duration)}
-                      </span>
-                    ) : null}
-
-                    {/* Favorite / Bookmark toggle */}
-                    <button
-                      type="button"
-                      onClick={() => toggleFavorite(ep.id)}
-                      className="p-1.5 rounded-lg text-[#777D78] hover:text-[#176B50] dark:text-[#A8B2AA] dark:hover:text-[#54B58B] hover:bg-[#FAF9F6] dark:hover:bg-[#1A2820] transition-colors"
-                      title={isFav ? 'পছন্দ তালিকা থেকে সরান' : 'পছন্দ তালিকায় যুক্ত করুন'}
-                      aria-label={isFav ? 'পছন্দ তালিকা থেকে সরান' : 'পছন্দ তালিকায় যুক্ত করুন'}
-                    >
-                      {isFav ? (
-                        <BookmarkCheck className="h-4 w-4 text-[#176B50] dark:text-[#54B58B] fill-current" />
-                      ) : (
-                        <Bookmark className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+            {episodes.map((ep, idx) => (
+              <EpisodeRow
+                key={ep.id}
+                episode={ep}
+                orderNumber={ep.episode_number || idx + 1}
+                isCurrent={currentEpisode?.id === ep.id}
+                isPlayingThis={currentEpisode?.id === ep.id && isPlaying}
+                isLoadingThis={currentEpisode?.id === ep.id && isLoadingAudio}
+                isFav={isFavorite(ep.id)}
+                coverUrl={coverUrl}
+                onPlay={handlePlayEpisode}
+                onToggleFavorite={toggleFavorite}
+              />
+            ))}
           </div>
         ) : (
           <div className="text-center py-12 px-4 rounded-2xl bg-[#FFFFFF] dark:bg-[#14221A] border border-[#EAEAE5] dark:border-[#26372D] space-y-2">

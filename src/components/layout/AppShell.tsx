@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
@@ -6,9 +6,17 @@ import { MobileNav } from './MobileNav';
 import { Footer } from './Footer';
 import { MiniPlayer } from '../player/MiniPlayer';
 import { FullPlayer } from '../player/FullPlayer';
+import { useAudioPlayer } from '../../context/AudioPlayerContext';
+
+const PageLoader: React.FC = () => (
+  <div className="py-24 text-center text-xs text-[#777C77] dark:text-[#A4ADA6] animate-pulse">
+    লোড হচ্ছে...
+  </div>
+);
 
 export const AppShell: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isFullPlayerOpen } = useAudioPlayer();
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FAFAF8] dark:bg-[#101713] text-[#171A18] dark:text-[#F3F4EF] transition-colors overflow-x-hidden">
@@ -18,13 +26,15 @@ export const AppShell: React.FC = () => {
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         <main className="flex-1 flex flex-col min-w-0 py-6 sm:py-8 pb-36 md:pb-28">
-          <Outlet />
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 
       <Footer />
       <MiniPlayer />
-      <FullPlayer />
+      {isFullPlayerOpen && <FullPlayer />}
       <MobileNav />
     </div>
   );

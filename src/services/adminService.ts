@@ -1,4 +1,6 @@
 import { supabase, getCoverImageUrl } from '../lib/supabase';
+import { logSecurityEvent } from './auditService';
+import { invalidateCategoriesCache } from './contentService';
 import type {
   Series,
   Category,
@@ -38,8 +40,8 @@ export interface ServiceResponse<T> {
 export const COVERS_BUCKET_LIMIT_BYTES = 5242880; // 5 MB
 export const AUDIO_BUCKET_LIMIT_BYTES = 104857600; // 100 MB
 
-const ALLOWED_COVER_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const ALLOWED_AUDIO_MIME_TYPES = [
+export const ALLOWED_COVER_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+export const ALLOWED_AUDIO_MIME_TYPES = [
   'audio/mpeg',
   'audio/mp4',
   'audio/aac',
@@ -49,23 +51,37 @@ const ALLOWED_AUDIO_MIME_TYPES = [
 
 /**
  * Normalizes image MIME type to match the Supabase 'covers' bucket configuration.
+ * Strictly rejects any explicitly specified unsupported MIME type.
+ * Extension fallback is only permitted when file.type is empty or generic 'application/octet-stream'.
  */
 export function resolveCoverMimeType(file: File): string | null {
-  const name = file.name.toLowerCase();
-  const type = file.type.toLowerCase();
+  const name = file.name ? file.name.toLowerCase() : '';
+  const type = file.type ? file.type.trim().toLowerCase() : '';
 
-  if (type === 'image/jpeg' || type === 'image/jpg' || name.endsWith('.jpg') || name.endsWith('.jpeg')) {
+  // 1. If explicit non-generic MIME type is provided:
+  if (type && type !== 'application/octet-stream') {
+    if (type === 'image/jpeg' || type === 'image/jpg') {
+      return 'image/jpeg';
+    }
+    if (type === 'image/png') {
+      return 'image/png';
+    }
+    if (type === 'image/webp') {
+      return 'image/webp';
+    }
+    // Explicit unsupported MIME type: STRICTLY REJECT (never fall back to filename extension)
+    return null;
+  }
+
+  // 2. Fallback only when MIME is empty or generic application/octet-stream
+  if (name.endsWith('.jpg') || name.endsWith('.jpeg')) {
     return 'image/jpeg';
   }
-  if (type === 'image/png' || name.endsWith('.png')) {
+  if (name.endsWith('.png')) {
     return 'image/png';
   }
-  if (type === 'image/webp' || name.endsWith('.webp')) {
+  if (name.endsWith('.webp')) {
     return 'image/webp';
-  }
-
-  if (ALLOWED_COVER_MIME_TYPES.includes(type)) {
-    return type;
   }
 
   return null;
@@ -74,40 +90,49 @@ export function resolveCoverMimeType(file: File): string | null {
 /**
  * Normalizes audio MIME type to strictly match the Supabase 'audio' bucket allowed_mime_types:
  * ['audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/ogg', 'audio/wav']
+ * Strictly rejects any explicitly specified unsupported MIME type.
+ * Extension fallback is only permitted when file.type is empty or generic 'application/octet-stream'.
  */
 export function resolveAudioMimeType(file: File): string | null {
-  const name = file.name.toLowerCase();
-  const type = file.type.toLowerCase();
+  const name = file.name ? file.name.toLowerCase() : '';
+  const type = file.type ? file.type.trim().toLowerCase() : '';
 
-  // MP3
-  if (type === 'audio/mpeg' || type === 'audio/mp3' || name.endsWith('.mp3')) {
+  // 1. If explicit non-generic MIME type is provided:
+  if (type && type !== 'application/octet-stream') {
+    if (type === 'audio/mpeg' || type === 'audio/mp3') {
+      return 'audio/mpeg';
+    }
+    if (type === 'audio/mp4' || type === 'audio/x-m4a' || type === 'audio/m4a') {
+      return 'audio/mp4';
+    }
+    if (type === 'audio/aac' || type === 'audio/x-aac') {
+      return 'audio/aac';
+    }
+    if (type === 'audio/ogg' || type === 'audio/vorbis') {
+      return 'audio/ogg';
+    }
+    if (type === 'audio/wav' || type === 'audio/x-wav' || type === 'audio/wave') {
+      return 'audio/wav';
+    }
+    // Explicit unsupported MIME type: STRICTLY REJECT (never fall back to filename extension)
+    return null;
+  }
+
+  // 2. Fallback only when MIME is empty or generic application/octet-stream
+  if (name.endsWith('.mp3')) {
     return 'audio/mpeg';
   }
-  // M4A / MP4 Audio
-  if (
-    type === 'audio/mp4' ||
-    type === 'audio/x-m4a' ||
-    type === 'audio/m4a' ||
-    name.endsWith('.m4a') ||
-    name.endsWith('.mp4')
-  ) {
+  if (name.endsWith('.m4a') || name.endsWith('.mp4')) {
     return 'audio/mp4';
   }
-  // AAC
-  if (type === 'audio/aac' || type === 'audio/x-aac' || name.endsWith('.aac')) {
+  if (name.endsWith('.aac')) {
     return 'audio/aac';
   }
-  // OGG
-  if (type === 'audio/ogg' || type === 'audio/vorbis' || name.endsWith('.ogg')) {
+  if (name.endsWith('.ogg')) {
     return 'audio/ogg';
   }
-  // WAV
-  if (type === 'audio/wav' || type === 'audio/x-wav' || type === 'audio/wave' || name.endsWith('.wav')) {
+  if (name.endsWith('.wav')) {
     return 'audio/wav';
-  }
-
-  if (ALLOWED_AUDIO_MIME_TYPES.includes(type)) {
-    return type;
   }
 
   return null;
@@ -207,6 +232,7 @@ export async function createCategory(input: {
       return { data: null, error: 'ক্যাটাগরি তৈরি করতে ব্যর্থ হয়েছে।' };
     }
 
+    invalidateCategoriesCache();
     return { data, error: null };
   } catch (err) {
     console.error('Unexpected error creating category:', err);
@@ -243,6 +269,7 @@ export async function updateCategory(
       return { data: null, error: 'ক্যাটাগরি তথ্য হালনাগাদ করা সম্ভব হয়নি।' };
     }
 
+    invalidateCategoriesCache();
     return { data, error: null };
   } catch (err) {
     console.error('Unexpected error updating category:', err);
@@ -279,6 +306,7 @@ export async function deleteCategory(id: string): Promise<ServiceResponse<boolea
       return { data: null, error: 'ক্যাটাগরি মুছে ফেলা সম্ভব হয়নি।' };
     }
 
+    invalidateCategoriesCache();
     return { data: true, error: null };
   } catch (err) {
     console.error('Unexpected error deleting category:', err);
@@ -308,8 +336,10 @@ export async function uploadCoverImage(file: File): Promise<ServiceResponse<Uplo
     }
 
     // 3. Generate safe path
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-    const cleanName = file.name.substring(0, file.name.lastIndexOf('.')).replace(/[^a-zA-Z0-9]/g, '_');
+    const mimeToCoverExt: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+    const ext = mimeToCoverExt[resolvedMime] || 'jpg';
+    const rawBase = file.name.substring(0, file.name.lastIndexOf('.')).toLowerCase();
+    const cleanName = rawBase.replace(/[^a-z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '').slice(0, 50) || 'cover';
     const path = `series/${Date.now()}-${cleanName}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
@@ -326,6 +356,14 @@ export async function uploadCoverImage(file: File): Promise<ServiceResponse<Uplo
     }
 
     const publicUrl = getCoverImageUrl(path) || '';
+    logSecurityEvent({
+      event_type: 'client_cover_uploaded',
+      event_category: 'storage_activity',
+      target_type: 'covers',
+      target_id: path,
+      description: 'কভার ইমেজ আপলোড',
+      metadata: { bucket: 'covers', file_size: file.size },
+    }).catch(() => {});
     return { data: { path, publicUrl }, error: null };
   } catch (err) {
     console.error('Unexpected error uploading cover:', err);
@@ -382,12 +420,13 @@ export async function uploadAudioFile(file: File): Promise<ServiceResponse<{ pat
 
     // 3. Unique path in private 'audio' bucket strictly conforming to database check constraint:
     // audio_path ~ '^[a-z0-9_-]+/[a-z0-9_-]+\.(mp3|m4a|aac|ogg|wav)$'
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'mp3';
+    const mimeToAudioExt: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/ogg': 'ogg', 'audio/wav': 'wav' };
+    const ext = mimeToAudioExt[resolvedMime] || 'mp3';
     const rawBase = file.name.substring(0, file.name.lastIndexOf('.')).toLowerCase();
     const cleanName = rawBase
       .replace(/[^a-z0-9_-]/g, '_')
       .replace(/_+/g, '_')
-      .replace(/^_+|_+$/g, '') || 'audio';
+      .replace(/^_+|_+$/g, '').slice(0, 50) || 'audio';
     const path = `episodes/${Date.now()}-${cleanName}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
@@ -399,9 +438,18 @@ export async function uploadAudioFile(file: File): Promise<ServiceResponse<{ pat
       });
 
     if (uploadError) {
-      console.error('Error uploading audio file to storage:', uploadError);
+      console.error('Error uploading audio file to storage:', uploadError.message);
       return { data: null, error: `অডিও ফাইল আপলোড ব্যর্থ হয়েছে: ${uploadError.message}` };
     }
+
+    logSecurityEvent({
+      event_type: 'client_audio_uploaded',
+      event_category: 'storage_activity',
+      target_type: 'audio',
+      target_id: path,
+      description: 'অডিও ফাইল আপলোড',
+      metadata: { bucket: 'audio', file_size: file.size },
+    }).catch(() => {});
 
     return { data: { path }, error: null };
   } catch (err) {
@@ -464,6 +512,9 @@ export async function createSeries(input: {
 
     if (error) {
       console.error('Error creating series:', error.message);
+      if (input.cover_image) {
+        deleteStorageFile('covers', input.cover_image).catch(() => {});
+      }
       if (error.code === '23505') {
         return { data: null, error: 'এই স্লাগ (slug) দিয়ে ইতিমধ্যে একটি সিরিজ রয়েছে।' };
       }
@@ -512,6 +563,11 @@ export async function updateSeries(
 
     if (error) {
       console.error('Error updating series:', error.message);
+      if (input.cover_image && previousCoverToCleanup && input.cover_image !== previousCoverToCleanup) {
+        deleteStorageFile('covers', input.cover_image).catch(delErr => {
+          console.error('Failed to cleanup replacement cover file after series update failure:', delErr);
+        });
+      }
       if (error.code === '23505') {
         return { data: null, error: 'এই স্লাগ (slug) ইতিমধ্যে অন্য সিরিজে ব্যবহৃত হয়েছে।' };
       }
@@ -529,6 +585,9 @@ export async function updateSeries(
     return { data: data as Series, error: null };
   } catch (err) {
     console.error('Unexpected error updating series:', err);
+    if (input.cover_image && previousCoverToCleanup && input.cover_image !== previousCoverToCleanup) {
+      deleteStorageFile('covers', input.cover_image).catch(() => {});
+    }
     return { data: null, error: 'অপ্রত্যাশিত ত্রুটি ঘটেছে।' };
   }
 }
@@ -713,7 +772,7 @@ export async function createEpisode(input: {
       published: input.published ?? false,
     };
 
-    console.log('Inserting episode into Supabase:', insertPayload);
+
 
     const { data, error } = await supabase
       .from('episodes')
@@ -722,12 +781,7 @@ export async function createEpisode(input: {
       .single();
 
     if (error) {
-      console.error('Supabase error creating episode:', {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      });
+      console.error('Error creating episode:', error.message);
 
       // Cleanup newly uploaded orphaned audio file from storage on database insert failure
       if (input.audio_path) {
@@ -841,7 +895,7 @@ export async function updateEpisode(
       updatePayload.audio_path = input.audio_path.trim().toLowerCase();
     }
 
-    console.log('Updating episode in Supabase:', id, updatePayload);
+
 
     // 1. Update database record FIRST so it always references an existing valid audio file
     const { data, error } = await supabase
@@ -852,13 +906,12 @@ export async function updateEpisode(
       .single();
 
     if (error) {
-      console.error('Supabase error updating episode:', {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      });
-
+      console.error('Error updating episode:', error.message);
+      if (input.audio_path && previousAudioPathToCleanup && input.audio_path !== previousAudioPathToCleanup) {
+        deleteStorageFile('audio', input.audio_path).catch(delErr => {
+          console.error('Failed to cleanup replacement audio file after episode update failure:', delErr);
+        });
+      }
       if (error.code === '23505') {
         if (
           error.message.includes('episodes_series_number_key') ||
@@ -899,6 +952,9 @@ export async function updateEpisode(
     return { data: data as Episode, error: null };
   } catch (err: any) {
     console.error('Unexpected error updating episode:', err);
+    if (input.audio_path && previousAudioPathToCleanup && input.audio_path !== previousAudioPathToCleanup) {
+      deleteStorageFile('audio', input.audio_path).catch(() => {});
+    }
     return { data: null, error: `অপ্রত্যাশিত ত্রুটি ঘটেছে: ${err?.message || err}` };
   }
 }

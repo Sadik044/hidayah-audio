@@ -28,6 +28,7 @@ import {
   toggleSeriesPublish,
   toggleSeriesFeatured,
   uploadCoverImage,
+  deleteStorageFile,
 } from '../../services/adminService';
 import { getCoverImageUrl } from '../../lib/supabase';
 import { toBengaliNumber } from '../../lib/utils';
@@ -61,6 +62,7 @@ export const SeriesManager: React.FC<SeriesManagerProps> = ({
 
   // Cover image upload
   const [coverPath, setCoverPath] = useState<string | null>(null);
+  const [newlyUploadedCoverPath, setNewlyUploadedCoverPath] = useState<string | null>(null);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -81,6 +83,7 @@ export const SeriesManager: React.FC<SeriesManagerProps> = ({
     setCategoryId(categories.length > 0 ? categories[0].id : '');
     setDescription('');
     setCoverPath(null);
+    setNewlyUploadedCoverPath(null);
     setCoverPreviewUrl(null);
     setFeatured(false);
     setPublished(false);
@@ -96,6 +99,7 @@ export const SeriesManager: React.FC<SeriesManagerProps> = ({
     setCategoryId(s.category_id || '');
     setDescription(s.description || '');
     setCoverPath(s.cover_image);
+    setNewlyUploadedCoverPath(null);
     setCoverPreviewUrl(s.cover_image ? getCoverImageUrl(s.cover_image) : null);
     setFeatured(s.featured);
     setPublished(s.published);
@@ -121,6 +125,12 @@ export const SeriesManager: React.FC<SeriesManagerProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (newlyUploadedCoverPath) {
+      deleteStorageFile('covers', newlyUploadedCoverPath).catch(console.error);
+    } else if (coverPath && !editingSeries) {
+      deleteStorageFile('covers', coverPath).catch(console.error);
+    }
+
     setUploadingCover(true);
     setUploadError(null);
 
@@ -133,7 +143,19 @@ export const SeriesManager: React.FC<SeriesManagerProps> = ({
     }
 
     setCoverPath(res.data.path);
+    setNewlyUploadedCoverPath(res.data.path);
     setCoverPreviewUrl(res.data.publicUrl || null);
+  };
+
+  const handleCloseModal = () => {
+    if (formLoading || uploadingCover) return;
+    if (newlyUploadedCoverPath) {
+      deleteStorageFile('covers', newlyUploadedCoverPath).catch(console.error);
+      setNewlyUploadedCoverPath(null);
+    } else if (coverPath && !editingSeries) {
+      deleteStorageFile('covers', coverPath).catch(console.error);
+    }
+    setIsModalOpen(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -169,8 +191,12 @@ export const SeriesManager: React.FC<SeriesManagerProps> = ({
       if (res.error) {
         setFormError(res.error);
         setFormLoading(false);
+        setNewlyUploadedCoverPath(null);
+        setCoverPath(editingSeries.cover_image);
+        setCoverPreviewUrl(editingSeries.cover_image ? getCoverImageUrl(editingSeries.cover_image) : null);
         return;
       }
+      setNewlyUploadedCoverPath(null);
       setSuccessMessage('সিরিজ সফলভাবে হালনাগাদ করা হয়েছে।');
     } else {
       const res = await createSeries({
@@ -186,8 +212,12 @@ export const SeriesManager: React.FC<SeriesManagerProps> = ({
       if (res.error) {
         setFormError(res.error);
         setFormLoading(false);
+        setNewlyUploadedCoverPath(null);
+        setCoverPath(null);
+        setCoverPreviewUrl(null);
         return;
       }
+      setNewlyUploadedCoverPath(null);
       setSuccessMessage('নতুন সিরিজ সফলভাবে তৈরি করা হয়েছে।');
     }
 
@@ -467,7 +497,7 @@ export const SeriesManager: React.FC<SeriesManagerProps> = ({
       {/* Create / Edit Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => !formLoading && setIsModalOpen(false)}
+        onClose={handleCloseModal}
         title={editingSeries ? 'সিরিজ সম্পাদনা' : 'নতুন সিরিজ তৈরি'}
         description="সিরিজের নাম, কভার ইমেজ, ক্যাটাগরি এবং স্ট্যাটাস নির্ধারণ করুন"
         maxWidth="lg"
@@ -602,7 +632,7 @@ export const SeriesManager: React.FC<SeriesManagerProps> = ({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setIsModalOpen(false)}
+              onClick={handleCloseModal}
               disabled={formLoading || uploadingCover}
             >
               বাতিল

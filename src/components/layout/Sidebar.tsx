@@ -73,29 +73,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         })}
       </nav>
 
-      {/* Admin Link */}
-      <div className="mt-8 pt-4 border-t border-[#E6E7E2]/60 dark:border-[#233128]/60 space-y-1">
-        <NavLink
-          to="/admin"
-          onClick={onClose}
-          className={({ isActive }) =>
-            cn(
-              'flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-colors whitespace-nowrap',
-              isActive
-                ? 'text-[#176B50] dark:text-[#48A783] bg-[#F0F1ED] dark:bg-[#19231D] font-medium'
-                : 'text-[#777C77] dark:text-[#A4ADA6] hover:text-[#171A18] dark:hover:text-[#F3F4EF]'
-            )
-          }
-        >
-          <Shield className="h-4 w-4 shrink-0" />
-          <span>অ্যাডমিন ড্যাশবোর্ড</span>
-          {isAdmin && (
-            <span className="ml-auto text-[10px] text-[#176B50] dark:text-[#48A783]">
-              সক্রিয়
-            </span>
-          )}
-        </NavLink>
-      </div>
+      {/* Admin Link - Only visible to authenticated administrators */}
+      {isAdmin && (
+        <div className="mt-8 pt-4 border-t border-[#E6E7E2]/60 dark:border-[#233128]/60 space-y-1">
+          <NavLink
+            to="/admin"
+            onClick={onClose}
+            className={({ isActive }) =>
+              cn(
+                'flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition-colors whitespace-nowrap',
+                isActive
+                  ? 'text-[#176B50] dark:text-[#48A783] bg-[#F0F1ED] dark:bg-[#19231D] font-medium'
+                  : 'text-[#777C77] dark:text-[#A4ADA6] hover:text-[#171A18] dark:hover:text-[#F3F4EF]'
+              )
+            }
+          >
+            <Shield className="h-4 w-4 shrink-0" />
+            <span>অ্যাডমিন ড্যাশবোর্ড</span>
+          </NavLink>
+        </div>
+      )}
     </div>
   );
 

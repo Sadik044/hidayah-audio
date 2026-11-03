@@ -74,8 +74,8 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
             )}
           </button>
 
-          {/* Admin access */}
-          {user ? (
+          {/* Admin access (only for authenticated users) */}
+          {user && (
             <div className="flex items-center gap-1.5">
               {isAdmin && (
                 <Link to="/admin">
@@ -94,17 +94,6 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                 লগআউট
               </Button>
             </div>
-          ) : (
-            <Link to="/admin/login">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1.5 text-xs text-[#777C77] dark:text-[#A4ADA6] hover:text-[#171A18] dark:hover:text-[#F3F4EF]"
-              >
-                <Shield className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">অ্যাডমিন প্রবেশ</span>
-              </Button>
-            </Link>
           )}
         </div>
       </div>

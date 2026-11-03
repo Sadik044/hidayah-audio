@@ -18,7 +18,7 @@ import {
   Loader2,
   MoreVertical,
 } from 'lucide-react';
-import { useAudioPlayer } from '../../context/AudioPlayerContext';
+import { useAudioPlayer, useAudioProgress } from '../../context/AudioPlayerContext';
 import { getCoverImageUrl } from '../../lib/supabase';
 import { formatDuration, toBengaliNumber } from '../../lib/utils';
 
@@ -28,8 +28,6 @@ export const FullPlayer: React.FC = () => {
     currentSeries,
     isPlaying,
     isLoadingAudio,
-    duration,
-    currentTime,
     playbackRate,
     repeatMode,
     error,
@@ -53,6 +51,8 @@ export const FullPlayer: React.FC = () => {
     toggleFavorite,
     playEpisode,
   } = useAudioPlayer();
+
+  const { currentTime, duration, progressPercent: rawProgressPercent } = useAudioProgress();
 
   // Sub-panel views inside full player
   const [showQueue, setShowQueue] = useState(false);
@@ -88,7 +88,7 @@ export const FullPlayer: React.FC = () => {
 
   const isFav = favorites.includes(currentEpisode.id);
   const effectiveTime = isDragging ? dragTime : currentTime;
-  const progressPercent = duration > 0 ? (effectiveTime / duration) * 100 : 0;
+  const progressPercent = isDragging ? (duration > 0 ? (dragTime / duration) * 100 : 0) : rawProgressPercent;
 
   const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);

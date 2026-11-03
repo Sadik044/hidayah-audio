@@ -12,7 +12,7 @@ import {
   Maximize2,
   Clock,
 } from 'lucide-react';
-import { useAudioPlayer } from '../../context/AudioPlayerContext';
+import { useAudioPlayer, useAudioProgress } from '../../context/AudioPlayerContext';
 import { getCoverImageUrl } from '../../lib/supabase';
 import { formatDuration } from '../../lib/utils';
 
@@ -22,8 +22,6 @@ export const MiniPlayer: React.FC = () => {
     currentSeries,
     isPlaying,
     isLoadingAudio,
-    duration,
-    currentTime,
     volume,
     isMuted,
     error,
@@ -41,11 +39,12 @@ export const MiniPlayer: React.FC = () => {
     sleepTimerMode,
   } = useAudioPlayer();
 
+  const { currentTime, duration, progressPercent } = useAudioProgress();
+
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
   if (!currentEpisode) return null;
 
-  const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
   const coverUrl = getCoverImageUrl(currentSeries?.cover_image);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -59,16 +58,16 @@ export const MiniPlayer: React.FC = () => {
       <div className="relative w-full h-1 group cursor-pointer bg-[#E6E7E2] dark:bg-[#233128]">
         <div
           className="absolute left-0 top-0 bottom-0 bg-[#176B50] dark:bg-[#48A783] transition-all duration-100"
-          style={{ width: `${progressPercentage}%` }}
+          style={{ width: `${progressPercent}%` }}
         />
         <input
           type="range"
           min="0"
           max="100"
           step="0.1"
-          value={progressPercentage || 0}
+          value={progressPercent || 0}
           onChange={handleSeek}
-          className="absolute inset-0 w-full opacity-0 cursor-pointer h-3 -top-1"
+          className="absolute inset-0 w-full opacity-0 cursor-pointer h-8 -top-3.5"
           aria-label="অডিও স্ক্রাবার"
         />
       </div>

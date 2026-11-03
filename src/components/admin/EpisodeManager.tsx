@@ -66,6 +66,7 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
 
   // Audio file states
   const [audioPath, setAudioPath] = useState<string>('');
+  const [newlyUploadedAudioPath, setNewlyUploadedAudioPath] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string>('');
   const [uploadingAudio, setUploadingAudio] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -103,6 +104,7 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
     setEpisodeNumber(String(nextNum));
     setDuration('');
     setAudioPath('');
+    setNewlyUploadedAudioPath(null);
     setSelectedFileName('');
     setPublished(false);
     setFormError(null);
@@ -119,6 +121,7 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
     setEpisodeNumber(ep.episode_number ? String(ep.episode_number) : '');
     setDuration(ep.duration ? String(ep.duration) : '');
     setAudioPath(ep.audio_path);
+    setNewlyUploadedAudioPath(null);
     setSelectedFileName(ep.audio_path.split('/').pop() || '');
     setPublished(ep.published);
     setFormError(null);
@@ -150,8 +153,10 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // If a previously uploaded audio was pending in this create session, clean it up
-    if (audioPath && !editingEpisode) {
+    // Clean up any previously uncommitted audio upload in this modal session
+    if (newlyUploadedAudioPath) {
+      deleteStorageFile('audio', newlyUploadedAudioPath).catch(console.error);
+    } else if (audioPath && !editingEpisode) {
       deleteStorageFile('audio', audioPath).catch(console.error);
     }
 
@@ -183,12 +188,16 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
     }
 
     setAudioPath(res.data.path);
+    setNewlyUploadedAudioPath(res.data.path);
   };
 
   const handleCloseModal = () => {
     if (formLoading || uploadingAudio) return;
-    // If an audio file was uploaded in this create modal but not saved, clean it up to prevent orphans
-    if (audioPath && !editingEpisode) {
+    // If an audio file was uploaded in this modal but not saved, clean it up to prevent orphans
+    if (newlyUploadedAudioPath) {
+      deleteStorageFile('audio', newlyUploadedAudioPath).catch(console.error);
+      setNewlyUploadedAudioPath(null);
+    } else if (audioPath && !editingEpisode) {
       deleteStorageFile('audio', audioPath).catch(console.error);
     }
     setIsModalOpen(false);
@@ -267,8 +276,12 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
         console.error('Update episode error:', res.error);
         setFormError(res.error);
         setFormLoading(false);
+        setNewlyUploadedAudioPath(null);
+        setAudioPath(editingEpisode.audio_path);
+        setSelectedFileName(editingEpisode.audio_path.split('/').pop() || '');
         return;
       }
+      setNewlyUploadedAudioPath(null);
       setSuccessMessage('পর্বের তথ্য সফলভাবে সংরক্ষিত হয়েছে।');
     } else {
       const res = await createEpisode({
@@ -286,8 +299,12 @@ export const EpisodeManager: React.FC<EpisodeManagerProps> = ({
         console.error('Create episode error:', res.error);
         setFormError(res.error);
         setFormLoading(false);
+        setNewlyUploadedAudioPath(null);
+        setAudioPath('');
+        setSelectedFileName('');
         return;
       }
+      setNewlyUploadedAudioPath(null);
       setSuccessMessage('নতুন পর্ব সফলভাবে যুক্ত করা হয়েছে।');
     }
 

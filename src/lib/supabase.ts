@@ -58,6 +58,14 @@ function mapAudioErrorCodeToBangla(code?: string, defaultMsg?: string): string {
   switch (code) {
     case 'FORBIDDEN':
       return 'এই অডিও পর্বটি অথবা এর মূল সিরিজটি বর্তমানে অপ্রকাশিত।';
+    case 'FORBIDDEN_ELEVATION_REQUIRED':
+      return 'অপ্রকাশিত অডিও প্রিভিউ করার জন্য ২-ফ্যাক্টর (AAL2) অ্যাডমিন প্রমাণীকরণ প্রয়োজন।';
+    case 'RATE_LIMIT_EXCEEDED':
+      return 'অতিরিক্ত অডিও অনুরোধের কারণে প্লেয়ার সাময়িক স্থগিত। অনুগ্রহ করে কিছুক্ষণ অপেক্ষা করে পুনরায় চেষ্টা করুন।';
+    case 'CORS_ORIGIN_NOT_ALLOWED':
+      return 'অননুমোদিত ডোমেইন থেকে অডিও অনুরোধ বাতিল করা হয়েছে।';
+    case 'UNAUTHORIZED':
+      return 'অডিও সার্ভারে প্রমাণীকরণ ব্যর্থ হয়েছে। পুনরায় লগইন করুন।';
     case 'NOT_FOUND':
       return 'অনুরোধকৃত অডিও পর্বটি খুঁজে পাওয়া যায়নি।';
     case 'AUDIO_NOT_FOUND':

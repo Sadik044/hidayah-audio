@@ -86,6 +86,10 @@ export const Home: React.FC = () => {
               <img
                 src={getCoverImageUrl(heroSeries.cover_image)}
                 alt={heroSeries.title}
+                width={288}
+                height={288}
+                fetchPriority="high"
+                decoding="async"
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).src = '/cover-placeholder.svg';
                 }}
@@ -169,6 +173,10 @@ export const Home: React.FC = () => {
                   <img
                     src={getCoverImageUrl(series.cover_image)}
                     alt={series.title}
+                    width={250}
+                    height={250}
+                    loading="lazy"
+                    decoding="async"
                     onError={(e) => {
                       (e.currentTarget as HTMLImageElement).src = '/cover-placeholder.svg';
                     }}

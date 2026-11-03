@@ -104,6 +104,48 @@ export type Database = {
         };
         Relationships: [];
       };
+      audit_logs: {
+        Row: {
+          id: string;
+          event_type: string;
+          event_category: string;
+          origin: string;
+          actor_id: string | null;
+          target_type: string | null;
+          target_id: string | null;
+          description: string;
+          metadata: Json;
+          aal_level: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_type: string;
+          event_category: string;
+          origin?: string;
+          actor_id?: string | null;
+          target_type?: string | null;
+          target_id?: string | null;
+          description: string;
+          metadata?: Json;
+          aal_level?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          event_type?: string;
+          event_category?: string;
+          origin?: string;
+          actor_id?: string | null;
+          target_type?: string | null;
+          target_id?: string | null;
+          description?: string;
+          metadata?: Json;
+          aal_level?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       series: {
         Row: {
           category_id: string | null;
@@ -157,6 +199,18 @@ export type Database = {
     };
     Functions: {
       is_admin: { Args: never; Returns: boolean };
+      is_admin_aal2: { Args: never; Returns: boolean };
+      log_security_event: {
+        Args: {
+          p_event_type: string;
+          p_event_category: string;
+          p_target_type?: string | null;
+          p_target_id?: string | null;
+          p_description?: string;
+          p_metadata?: Json;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       [_ in never]: never;
@@ -185,3 +239,4 @@ export type EpisodeInsert = Database['public']['Tables']['episodes']['Insert'];
 export type EpisodeUpdate = Database['public']['Tables']['episodes']['Update'];
 
 export type Profile = Database['public']['Tables']['profiles']['Row'];
+export type AuditLog = Database['public']['Tables']['audit_logs']['Row'];

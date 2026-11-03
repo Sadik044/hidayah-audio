@@ -18,26 +18,38 @@ export const Browse: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadBrowseData = async () => {
+  // Load categories once on mount with caching
+  useEffect(() => {
+    let isMounted = true;
+    fetchCategories().then((catRes) => {
+      if (!isMounted) return;
+      if (catRes.error) {
+        setError(catRes.error);
+      } else {
+        setCategories(catRes.data || []);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Load series whenever selectedCategoryId changes
+  const loadSeries = async () => {
     setLoading(true);
     setError(null);
 
-    const [catRes, seriesRes] = await Promise.all([
-      fetchCategories(),
-      fetchSeriesList({ categoryId: selectedCategoryId }),
-    ]);
+    const seriesRes = await fetchSeriesList({ categoryId: selectedCategoryId });
 
-    if (catRes.error || seriesRes.error) {
-      setError(catRes.error || seriesRes.error);
+    if (seriesRes.error) {
+      setError(seriesRes.error);
     }
-
-    setCategories(catRes.data || []);
     setSeriesList(seriesRes.data || []);
     setLoading(false);
   };
 
   useEffect(() => {
-    loadBrowseData();
+    loadSeries();
   }, [selectedCategoryId]);
 
   return (
@@ -59,7 +71,7 @@ export const Browse: React.FC = () => {
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={loadBrowseData} className="gap-1.5 text-xs shrink-0">
+          <Button variant="ghost" size="sm" onClick={loadSeries} className="gap-1.5 text-xs shrink-0">
             <RefreshCw className="h-3 w-3" />
             <span>আবার চেষ্টা করুন</span>
           </Button>
@@ -115,6 +127,10 @@ export const Browse: React.FC = () => {
                 <img
                   src={getCoverImageUrl(series.cover_image)}
                   alt={series.title}
+                  width={300}
+                  height={300}
+                  loading="lazy"
+                  decoding="async"
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).src = '/cover-placeholder.svg';
                   }}
