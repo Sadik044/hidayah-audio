@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { Episode, Series } from '../types/database.types';
 import { getEpisodeAudioUrl } from '../lib/supabase';
+import {
+  updateMediaSessionMetadata,
+  updateMediaSessionPlaybackState,
+  updateMediaSessionPositionState,
+  registerMediaSessionActions,
+  clearMediaSession,
+} from '../lib/mediaSession';
 
 export interface RecentlyPlayedItem {
   episode: Episode;
@@ -117,6 +124,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // Recovery retry lock to prevent infinite retry loops on unrecoverable media errors
   const isRetryingRef = useRef<boolean>(false);
+  const isClosingRef = useRef<boolean>(false);
 
   // Sleep Timer state
   const [sleepTimerMode, setSleepTimerMode] = useState<SleepTimerMode>(null);
@@ -135,6 +143,9 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   // Function refs so listeners can invoke latest callbacks without causing re-subscriptions
   const playEpisodeRef = useRef<(episode: Episode, series?: Series | null, newQueue?: Episode[]) => Promise<void>>(async () => {});
   const playNextRef = useRef<() => void>(() => {});
+  const togglePlayRef = useRef<() => Promise<void> | void>(() => {});
+  const playPreviousRef = useRef<() => void>(() => {});
+  const seekRef = useRef<(time: number) => Promise<void> | void>(() => {});
 
   // Saved favorites
   const [favorites, setFavorites] = useState<string[]>(() => {
@@ -205,6 +216,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     async (episode: Episode, series?: Series | null, newQueue?: Episode[]) => {
       if (!audioRef.current) return;
 
+      isClosingRef.current = false;
       setError(null);
       setCurrentEpisode(episode);
       const effectiveSeries = series || episode.series || null;
@@ -332,6 +344,8 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   }, []);
 
+  playPreviousRef.current = playPrevious;
+
   // Initialize single shared HTMLAudioElement and attach listeners ONCE
   useEffect(() => {
     const audio = new Audio();
@@ -342,19 +356,57 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     audio.muted = isMutedRef.current;
     audioRef.current = audio;
 
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
-    const onTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
+    let lastPositionUpdate = 0;
+
+    const onPlay = () => {
+      if (isClosingRef.current || !stateRef.current.currentEpisode) return;
+      setIsPlaying(true);
+      updateMediaSessionPlaybackState('playing');
+      updateMediaSessionPositionState(audio.currentTime, durationRef.current, audio.playbackRate);
     };
+
+    const onPause = () => {
+      setIsPlaying(false);
+      if (!isClosingRef.current && stateRef.current.currentEpisode) {
+        updateMediaSessionPlaybackState('paused');
+        updateMediaSessionPositionState(audio.currentTime, durationRef.current, audio.playbackRate);
+      } else {
+        updateMediaSessionPlaybackState('none');
+      }
+    };
+
+    const onTimeUpdate = () => {
+      if (isClosingRef.current || !stateRef.current.currentEpisode) return;
+      setCurrentTime(audio.currentTime);
+      const now = Date.now();
+      // Periodically sync position state to OS lock screen (~every 4 seconds)
+      if (now - lastPositionUpdate > 4000) {
+        lastPositionUpdate = now;
+        updateMediaSessionPositionState(audio.currentTime, durationRef.current, audio.playbackRate);
+      }
+    };
+
     const onLoadedMetadata = () => {
+      if (isClosingRef.current || !stateRef.current.currentEpisode) return;
       const d = audio.duration || 0;
       setDuration(d);
       durationRef.current = d;
       audio.playbackRate = playbackRateRef.current;
+      updateMediaSessionPositionState(audio.currentTime, d, playbackRateRef.current);
+    };
+
+    const onRateChange = () => {
+      if (isClosingRef.current || !stateRef.current.currentEpisode) return;
+      updateMediaSessionPositionState(audio.currentTime, durationRef.current, audio.playbackRate);
+    };
+
+    const onSeeked = () => {
+      if (isClosingRef.current || !stateRef.current.currentEpisode) return;
+      updateMediaSessionPositionState(audio.currentTime, durationRef.current, audio.playbackRate);
     };
 
     const onEnded = () => {
+      if (isClosingRef.current || !stateRef.current.currentEpisode) return;
       const { repeatMode: rMode, sleepTimerMode: sMode } = stateRef.current;
 
       // 1. Check if sleep timer is set to "end_of_episode"
@@ -364,6 +416,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setSleepTimerMode(null);
         setSleepTimerMinutes(null);
         setSleepTimerSecondsRemaining(null);
+        updateMediaSessionPlaybackState('paused');
         return;
       }
 
@@ -381,10 +434,12 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       } else {
         setIsPlaying(false);
         setCurrentTime(0);
+        updateMediaSessionPlaybackState('paused');
       }
     };
 
     const onError = async () => {
+      if (isClosingRef.current || !stateRef.current.currentEpisode) return;
       const { currentEpisode } = stateRef.current;
 
       // Automated URL recovery retry if URL expired or experienced a transient network glitch
@@ -411,6 +466,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
       setIsLoadingAudio(false);
       setIsPlaying(false);
+      updateMediaSessionPlaybackState('paused');
       setError('অডিও লোড করতে সমস্যা হয়েছে। পুনরায় চেষ্টা করুন।');
     };
 
@@ -418,6 +474,8 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     audio.addEventListener('pause', onPause);
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
+    audio.addEventListener('ratechange', onRateChange);
+    audio.addEventListener('seeked', onSeeked);
     audio.addEventListener('ended', onEnded);
     audio.addEventListener('error', onError);
 
@@ -427,8 +485,11 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+      audio.removeEventListener('ratechange', onRateChange);
+      audio.removeEventListener('seeked', onSeeked);
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
+      clearMediaSession();
     };
   }, [refreshStreamUrl]);
 
@@ -495,6 +556,8 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   }, [refreshStreamUrl]);
 
+  togglePlayRef.current = togglePlay;
+
   /**
    * Seeks to a specific timestamp in the audio track.
    * If the signed URL has expired or is expiring within 15s, seamlessly
@@ -512,6 +575,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         audioRef.current.src = freshUrl;
         audioRef.current.currentTime = clamped;
         setCurrentTime(clamped);
+        updateMediaSessionPositionState(clamped, durationRef.current, audioRef.current.playbackRate);
         if (stateRef.current.isPlaying) {
           await audioRef.current.play();
         }
@@ -524,8 +588,84 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     } else {
       audioRef.current.currentTime = clamped;
       setCurrentTime(clamped);
+      updateMediaSessionPositionState(clamped, durationRef.current, audioRef.current.playbackRate);
     }
   }, [refreshStreamUrl]);
+
+  seekRef.current = seek;
+
+  // Synchronize MediaSession metadata & playbackState
+  useEffect(() => {
+    if (!currentEpisode || isClosingRef.current) {
+      updateMediaSessionMetadata(null);
+      updateMediaSessionPlaybackState('none');
+      return;
+    }
+
+    const effectiveSeries = currentSeries || currentEpisode.series;
+    const artist =
+      (currentEpisode as any).speaker ||
+      (effectiveSeries as any)?.speaker ||
+      effectiveSeries?.category?.name ||
+      'হিদায়াহ অডিও';
+
+    updateMediaSessionMetadata({
+      title: currentEpisode.title,
+      artist,
+      album: effectiveSeries?.title || 'হিদায়াহ অডিও',
+      coverImage: effectiveSeries?.cover_image,
+    });
+
+    updateMediaSessionPlaybackState(isPlaying ? 'playing' : 'paused');
+
+    if (currentEpisode.duration && currentEpisode.duration > 0 && durationRef.current === 0) {
+      durationRef.current = currentEpisode.duration;
+      updateMediaSessionPositionState(0, currentEpisode.duration, playbackRateRef.current);
+    }
+  }, [currentEpisode, currentSeries, isPlaying]);
+
+  // Register MediaSession action handlers (play, pause, next, previous, seek)
+  useEffect(() => {
+    if (!currentEpisode) {
+      registerMediaSessionActions(null);
+      return;
+    }
+
+    registerMediaSessionActions({
+      onPlay: () => {
+        if (audioRef.current?.paused) {
+          togglePlayRef.current();
+        }
+      },
+      onPause: () => {
+        if (audioRef.current && !audioRef.current.paused) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+        }
+      },
+      onPreviousTrack: () => playPreviousRef.current(),
+      onNextTrack: () => playNextRef.current(),
+      onSeekBackward: (offset) => {
+        if (audioRef.current) {
+          const target = Math.max(0, audioRef.current.currentTime - offset);
+          seekRef.current(target);
+        }
+      },
+      onSeekForward: (offset) => {
+        if (audioRef.current) {
+          const target = Math.min(durationRef.current || Infinity, audioRef.current.currentTime + offset);
+          seekRef.current(target);
+        }
+      },
+      onSeekTo: (position) => {
+        seekRef.current(position);
+      },
+    });
+
+    return () => {
+      registerMediaSessionActions(null);
+    };
+  }, [currentEpisode, queueIndex, queue.length, repeatMode]);
 
   const setVolume = useCallback((val: number) => {
     const clamped = Math.max(0, Math.min(1, val));
@@ -631,9 +771,15 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }, []);
 
   const closePlayer = useCallback(() => {
+    isClosingRef.current = true;
+    stateRef.current.currentEpisode = null;
+    stateRef.current.currentSeries = null;
+    stateRef.current.isPlaying = false;
+    clearMediaSession();
     if (audioRef.current) {
       audioRef.current.pause();
-      audioRef.current.src = '';
+      audioRef.current.removeAttribute('src');
+      audioRef.current.load();
     }
     setCurrentEpisode(null);
     setCurrentSeries(null);
