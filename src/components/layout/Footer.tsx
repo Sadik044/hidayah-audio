@@ -1,35 +1,26 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Logo } from '../common/Logo';
 
 export const Footer: React.FC = () => {
   return (
-    <footer className="mt-auto w-full border-t border-[#E6E7E2] dark:border-[#233128] bg-transparent transition-colors">
-      <div className="max-w-page mx-auto px-4 sm:px-8 lg:px-12 pt-6 pb-28 sm:py-7">
-
-        <div className="flex flex-col items-center gap-3">
-          <Link
-            to="/"
-            aria-label="হিদায়াহ অডিও হোম"
-            className="hover:opacity-80 transition-opacity"
-          >
+    <footer className="mt-auto border-t border-[#E6E7E2] dark:border-[#233128] py-8 transition-colors">
+      <div className="max-w-page mx-auto px-4 sm:px-8 lg:px-12 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-[#777C77] dark:text-[#A4ADA6]">
+        {/* Brand and tagline */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 text-center sm:text-left">
+          <Link to="/" className="hover:opacity-90 transition-opacity">
             <Logo size="sm" />
           </Link>
-
-          <p className="max-w-md text-center text-xs sm:text-sm leading-relaxed text-[#777C77] dark:text-[#A4ADA6]">
+          <span className="hidden sm:inline text-[#E6E7E2] dark:text-[#233128]">|</span>
+          <p className="text-xs">
             সহীহ সুন্নাহর আলোকে নির্বাচিত ধারাবাহিক অডিও ও আলোচনা
           </p>
         </div>
-
-        <div className="mt-5 border-t border-[#E6E7E2] dark:border-[#233128] pt-4">
-          <p className="text-center text-[11px] sm:text-xs leading-6 text-[#929792] dark:text-[#7F8A82]">
-            © {new Date().getFullYear()} Hidayah Audio
-            <span className="mx-1">·</span>
-            "সংগৃহীত অডিও" এর সকল অধিকার সংরক্ষিত।
-          </p>
+        
+        {/* Copyright */}
+        <div className="text-[11px]">
+          © {new Date().getFullYear()} Hidayah Audio "সংগৃহীত অডিও"
         </div>
-
       </div>
     </footer>
   );
