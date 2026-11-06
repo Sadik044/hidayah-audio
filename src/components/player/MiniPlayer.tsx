@@ -191,7 +191,7 @@ export const MiniPlayer: React.FC = () => {
               type="button"
               onClick={toggleMute}
               onMouseEnter={() => setShowVolumeSlider(true)}
-              className="p-1.5 text-[#777C77] hover:text-[#171A18] dark:hover:text-[#F3F4EF]"
+              className="p-1.5 text-[#777C77] dark:text-[#A4ADA6] hover:text-[#171A18] dark:hover:text-[#F3F4EF] transition-colors"
               aria-label="সাউন্ড কন্ট্রোল"
             >
               {isMuted || volume === 0 ? (
@@ -224,7 +224,7 @@ export const MiniPlayer: React.FC = () => {
           <button
             type="button"
             onClick={openFullPlayer}
-            className="p-1.5 rounded-lg text-stone-600 dark:text-stone-300 hover:text-emerald-rich hover:bg-ivory dark:hover:bg-emerald-surface transition-colors"
+            className="p-1.5 rounded-lg text-[#777C77] dark:text-[#A4ADA6] hover:text-[#176B50] dark:hover:text-[#48A783] hover:bg-[#F0F1ED] dark:hover:bg-[#19231D] transition-colors"
             title="ফুল প্লেয়ার খুলুন"
             aria-label="ফুল প্লেয়ার খুলুন"
           >
@@ -235,7 +235,7 @@ export const MiniPlayer: React.FC = () => {
           <button
             type="button"
             onClick={closePlayer}
-            className="p-1.5 rounded-lg text-stone-500 hover:bg-ivory dark:hover:bg-emerald-surface transition-colors"
+            className="p-1.5 rounded-lg text-[#777C77] dark:text-[#A4ADA6] hover:text-[#171A18] dark:hover:text-[#F3F4EF] hover:bg-[#F0F1ED] dark:hover:bg-[#19231D] transition-colors"
             title="প্লেয়ার বন্ধ করুন"
             aria-label="প্লেয়ার বন্ধ করুন"
           >

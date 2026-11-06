@@ -114,7 +114,7 @@ export const FullPlayer: React.FC = () => {
   const coverUrl = getCoverImageUrl(rawCover);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950 text-white select-none animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#FAFAF8] dark:bg-[#101713] text-[#171A18] dark:text-[#F3F4EF] select-none animate-in fade-in duration-300 transition-colors">
       {/* 1. Dynamic Ambient Blurred Background derived from actual cover */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none select-none z-0">
         <img
@@ -124,11 +124,11 @@ export const FullPlayer: React.FC = () => {
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).src = '/cover-placeholder.svg';
           }}
-          className="w-full h-full object-cover scale-150 blur-3xl opacity-35 filter brightness-75 contrast-125 transform-gpu"
+          className="w-full h-full object-cover scale-150 blur-3xl opacity-20 dark:opacity-35 filter brightness-105 dark:brightness-75 contrast-110 dark:contrast-125 transform-gpu transition-opacity"
         />
-        {/* Dark overlay & subtle emerald gradient for depth and readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/85 via-stone-950/80 to-emerald-950/95" />
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-3xl" />
+        {/* Theme-aware overlay & subtle gradient for depth and readability */}
+        <div className="absolute inset-0 bg-gradient-to-b from-[#FAFAF8]/90 via-[#FAFAF8]/80 to-[#FAFAF8]/95 dark:from-black/85 dark:via-[#101713]/80 dark:to-[#0c1a13]/95 transition-colors" />
+        <div className="absolute inset-0 bg-[#FAFAF8]/40 dark:bg-black/40 backdrop-blur-3xl transition-colors" />
       </div>
 
       {/* 2. Scrollable Content Wrapper */}
@@ -142,7 +142,7 @@ export const FullPlayer: React.FC = () => {
               setShowMenu(false);
               closeFullPlayer();
             }}
-            className="p-2.5 rounded-full text-stone-300 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
+            className="p-2.5 rounded-full text-[#777C77] dark:text-[#A4ADA6] hover:text-[#171A18] dark:hover:text-[#F3F4EF] hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all"
             title="মিনিমাইজ করুন"
             aria-label="মিনিমাইজ করুন"
           >
@@ -150,14 +150,14 @@ export const FullPlayer: React.FC = () => {
           </button>
 
           <div className="flex flex-col items-center text-center min-w-0 px-2">
-            <span className="text-[11px] font-medium tracking-widest text-stone-400 uppercase">
+            <span className="text-[11px] font-medium tracking-widest text-[#777C77] dark:text-[#A4ADA6] uppercase">
               এখন বাজছে
             </span>
             {currentSeries && (
               <Link
                 to={`/series/${currentSeries.id}`}
                 onClick={closeFullPlayer}
-                className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 truncate max-w-[200px] sm:max-w-xs transition-colors"
+                className="text-xs font-semibold text-[#176B50] dark:text-[#48A783] hover:text-[#12543E] dark:hover:text-[#5DB895] truncate max-w-[200px] sm:max-w-xs transition-colors"
               >
                 {currentSeries.title}
               </Link>
@@ -167,12 +167,12 @@ export const FullPlayer: React.FC = () => {
           <button
             type="button"
             onClick={() => toggleFavorite(currentEpisode.id)}
-            className="p-2.5 rounded-full text-stone-300 hover:text-gold active:scale-95 transition-all"
+            className="p-2.5 rounded-full text-[#777C77] dark:text-[#A4ADA6] hover:text-[#176B50] dark:hover:text-[#48A783] hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all"
             title={isFav ? 'পছন্দ থেকে সরান' : 'পছন্দে যোগ করুন'}
             aria-label={isFav ? 'পছন্দ থেকে সরান' : 'পছন্দে যোগ করুন'}
           >
             {isFav ? (
-              <BookmarkCheck className="h-6 w-6 text-gold fill-current" />
+              <BookmarkCheck className="h-6 w-6 text-[#176B50] dark:text-[#48A783] fill-current" />
             ) : (
               <Bookmark className="h-6 w-6" />
             )}
@@ -181,7 +181,7 @@ export const FullPlayer: React.FC = () => {
 
         {/* Step 2: Large Centered Square Cover Artwork (1:1 Aspect Ratio, Never Panoramic) */}
         <div className="w-full flex justify-center items-center py-1 sm:py-2 shrink-0">
-          <div className="w-[280px] h-[280px] xs:w-[320px] xs:h-[320px] sm:w-[360px] sm:h-[360px] md:w-[400px] md:h-[400px] max-w-[85vw] max-h-[85vw] aspect-square shrink-0 rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.8)] border border-white/10 ring-1 ring-white/5 bg-stone-900 flex items-center justify-center group">
+          <div className="w-[280px] h-[280px] xs:w-[320px] xs:h-[320px] sm:w-[360px] sm:h-[360px] md:w-[400px] md:h-[400px] max-w-[85vw] max-h-[85vw] aspect-square shrink-0 rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_15px_35px_rgba(0,0,0,0.12)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.8)] border border-[#E6E7E2] dark:border-white/10 ring-1 ring-[#E6E7E2]/50 dark:ring-white/5 bg-[#F0F1ED] dark:bg-stone-900 flex items-center justify-center group transition-all">
             <img
               src={coverUrl}
               alt={currentEpisode.title}
@@ -198,12 +198,12 @@ export const FullPlayer: React.FC = () => {
           {/* Episode Info (Badge, Title, Subtitle) */}
           <div className="min-w-0 flex-1 space-y-1 text-left">
             {currentEpisode.episode_number && (
-              <div className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 mb-0.5">
+              <div className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#176B50]/10 dark:bg-[#48A783]/20 text-[#176B50] dark:text-[#48A783] border border-[#176B50]/20 dark:border-[#48A783]/30 mb-0.5">
                 পর্ব {toBengaliNumber(currentEpisode.episode_number)}
               </div>
             )}
 
-            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight leading-snug line-clamp-2 drop-shadow-md">
+            <h1 className="text-xl sm:text-2xl font-bold text-[#171A18] dark:text-[#F3F4EF] tracking-tight leading-snug line-clamp-2 dark:drop-shadow-md">
               {currentEpisode.title}
             </h1>
 
@@ -211,7 +211,7 @@ export const FullPlayer: React.FC = () => {
               <Link
                 to={`/series/${currentSeries.id}`}
                 onClick={closeFullPlayer}
-                className="text-sm font-medium text-emerald-400 hover:text-emerald-300 truncate block transition-colors mt-0.5"
+                className="text-sm font-medium text-[#176B50] dark:text-[#48A783] hover:text-[#12543E] dark:hover:text-[#5DB895] truncate block transition-colors mt-0.5"
               >
                 {currentSeries.title}
               </Link>
@@ -228,15 +228,15 @@ export const FullPlayer: React.FC = () => {
               }}
               className={`p-2.5 rounded-full transition-all active:scale-95 flex items-center justify-center backdrop-blur-md relative ${
                 showMenu || playbackRate !== 1 || sleepTimerMode !== null
-                  ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.25)]'
-                : 'bg-white/5 text-stone-300 hover:text-white hover:bg-white/10 border border-white/10'
+                  ? 'bg-[#176B50]/15 dark:bg-[#48A783]/25 text-[#176B50] dark:text-[#48A783] border border-[#176B50]/30 dark:border-[#48A783]/40 shadow-sm dark:shadow-[0_0_15px_rgba(16,185,129,0.25)]'
+                  : 'bg-black/5 dark:bg-white/5 text-[#777C77] dark:text-[#A4ADA6] hover:text-[#171A18] dark:hover:text-[#F3F4EF] hover:bg-black/10 dark:hover:bg-white/10 border border-[#E6E7E2] dark:border-white/10'
               }`}
               title="প্লেব্যাক গতি ও স্লিপ টাইমার অপশন"
               aria-label="প্লেব্যাক গতি ও স্লিপ টাইমার মেনু"
             >
               <MoreVertical className="h-5 w-5" />
               {(playbackRate !== 1 || sleepTimerMode !== null) && (
-                <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-stone-950 animate-pulse" />
+                <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[#176B50] dark:bg-[#48A783] ring-2 ring-[#FAFAF8] dark:ring-[#101713] animate-pulse" />
               )}
             </button>
           </div>
@@ -245,16 +245,16 @@ export const FullPlayer: React.FC = () => {
         {/* Step 4: Seekable Progress Bar with Current Time and Duration */}
         <div className="space-y-1.5 w-full">
           {error && (
-            <div className="mb-2 p-3 rounded-xl bg-red-500/20 border border-red-500/30 text-xs text-red-200 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
+            <div className="mb-2 p-3 rounded-xl bg-red-500/10 dark:bg-red-500/20 border border-red-500/20 dark:border-red-500/30 text-xs text-red-600 dark:text-red-200 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 text-red-500 dark:text-red-400" />
               <span>{error}</span>
             </div>
           )}
 
           <div className="relative w-full flex items-center group cursor-pointer py-1">
-            <div className="w-full h-1.5 sm:h-2 bg-white/20 group-hover:bg-white/30 rounded-full overflow-hidden transition-all">
+            <div className="w-full h-1.5 sm:h-2 bg-[#E6E7E2] dark:bg-white/20 group-hover:bg-[#D5D7D1] dark:group-hover:bg-white/30 rounded-full overflow-hidden transition-all">
               <div
-                className="h-full bg-gradient-to-r from-emerald-400 to-gold rounded-full transition-all duration-75"
+                className="h-full bg-[#176B50] dark:bg-[#48A783] rounded-full transition-all duration-75"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
@@ -274,7 +274,7 @@ export const FullPlayer: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center justify-between text-xs text-stone-400 tabular-nums px-0.5 font-mono">
+          <div className="flex items-center justify-between text-xs text-[#777C77] dark:text-[#A4ADA6] tabular-nums px-0.5 font-mono">
             <span>{formatDuration(effectiveTime)}</span>
             <span>{formatDuration(duration)}</span>
           </div>
@@ -288,8 +288,8 @@ export const FullPlayer: React.FC = () => {
             onClick={toggleRepeat}
             className={`p-3 rounded-full transition-all active:scale-90 ${
               repeatMode !== 'off'
-                ? 'text-emerald-400 bg-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
-                : 'text-stone-400 hover:text-white hover:bg-white/5'
+                ? 'text-[#176B50] dark:text-[#48A783] bg-[#176B50]/15 dark:bg-[#48A783]/20 shadow-sm dark:shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                : 'text-[#777C77] dark:text-[#A4ADA6] hover:text-[#171A18] dark:hover:text-[#F3F4EF] hover:bg-black/5 dark:hover:bg-white/5'
             }`}
             title={`রিপিট: ${
               repeatMode === 'one' ? 'একটি পর্ব' : repeatMode === 'all' ? 'সকল পর্ব' : 'বন্ধ'
@@ -308,7 +308,7 @@ export const FullPlayer: React.FC = () => {
             type="button"
             onClick={playPrevious}
             disabled={!hasPrevious && repeatMode !== 'all'}
-            className="p-3 rounded-full text-stone-200 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none transition-all active:scale-95"
+            className="p-3 rounded-full text-[#171A18] dark:text-[#F3F4EF] hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none transition-all active:scale-95"
             title="পূর্ববর্তী পর্ব"
             aria-label="পূর্ববর্তী পর্ব"
           >
@@ -320,7 +320,7 @@ export const FullPlayer: React.FC = () => {
             type="button"
             onClick={togglePlay}
             disabled={isLoadingAudio}
-            className="h-16 w-16 sm:h-20 sm:w-20 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center shadow-[0_8px_30px_rgba(5,150,105,0.4)] active:scale-95 transition-all"
+            className="h-16 w-16 sm:h-20 sm:w-20 rounded-full bg-[#176B50] hover:bg-[#12543E] dark:bg-[#48A783] dark:hover:bg-[#5DB895] text-white dark:text-[#101713] flex items-center justify-center shadow-[0_8px_25px_rgba(23,107,80,0.35)] dark:shadow-[0_8px_30px_rgba(72,167,131,0.35)] active:scale-95 transition-all"
             title={isPlaying ? 'বিরতি দিন' : 'চালান'}
             aria-label={isPlaying ? 'বিরতি দিন' : 'চালান'}
           >
@@ -338,7 +338,7 @@ export const FullPlayer: React.FC = () => {
             type="button"
             onClick={playNext}
             disabled={!hasNext && repeatMode !== 'all'}
-            className="p-3 rounded-full text-stone-200 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none transition-all active:scale-95"
+            className="p-3 rounded-full text-[#171A18] dark:text-[#F3F4EF] hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-30 disabled:pointer-events-none transition-all active:scale-95"
             title="পরবর্তী পর্ব"
             aria-label="পরবর্তী পর্ব"
           >
@@ -354,8 +354,8 @@ export const FullPlayer: React.FC = () => {
             }}
             className={`p-3 rounded-full transition-all active:scale-90 ${
               showQueue
-                ? 'text-emerald-400 bg-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
-                : 'text-stone-400 hover:text-white hover:bg-white/5'
+                ? 'text-[#176B50] dark:text-[#48A783] bg-[#176B50]/15 dark:bg-[#48A783]/20 shadow-sm dark:shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                : 'text-[#777C77] dark:text-[#A4ADA6] hover:text-[#171A18] dark:hover:text-[#F3F4EF] hover:bg-black/5 dark:hover:bg-white/5'
             }`}
             title="প্লেলিস্ট / পর্বের তালিকা"
             aria-label="প্লেলিস্ট"
@@ -364,38 +364,37 @@ export const FullPlayer: React.FC = () => {
           </button>
         </div>
 
-
         {/* Three-Dot Menu Drawer / Bottom Sheet */}
         {showMenu && (
           <div className="fixed inset-0 z-50 flex flex-col justify-end select-none">
             {/* Backdrop: Tap outside to close */}
             <div
-              className="fixed inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
+              className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
               onClick={() => setShowMenu(false)}
             />
 
             {/* Bottom Sheet Card */}
             <div
-              className="relative z-10 w-full max-w-lg md:max-w-xl mx-auto bg-stone-900/98 dark:bg-[#0c1a13]/98 backdrop-blur-2xl border-t border-x border-white/15 rounded-t-3xl p-5 sm:p-6 shadow-[0_-15px_50px_rgba(0,0,0,0.8)] space-y-5 animate-in slide-in-from-bottom duration-200"
+              className="relative z-10 w-full max-w-lg md:max-w-xl mx-auto bg-[#FAFAF8] dark:bg-[#101713] backdrop-blur-2xl border-t border-x border-[#E6E7E2] dark:border-[#233128] rounded-t-3xl p-5 sm:p-6 shadow-[0_-15px_50px_rgba(0,0,0,0.15)] dark:shadow-[0_-15px_50px_rgba(0,0,0,0.8)] space-y-5 animate-in slide-in-from-bottom duration-200"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Drag Handle Bar */}
-              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto -mt-1 mb-1" />
+              <div className="w-10 h-1 bg-[#E6E7E2] dark:bg-white/20 rounded-full mx-auto -mt-1 mb-1" />
 
               {/* Menu Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <div className="flex items-center justify-between pb-3 border-b border-[#E6E7E2] dark:border-[#233128]">
                 <div className="flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <div className="h-7 w-7 rounded-full bg-[#176B50]/10 dark:bg-[#48A783]/20 text-[#176B50] dark:text-[#48A783] flex items-center justify-center">
                     <MoreVertical className="h-4 w-4" />
                   </div>
-                  <h3 className="text-sm font-bold text-white tracking-wide">
+                  <h3 className="text-sm font-bold text-[#171A18] dark:text-[#F3F4EF] tracking-wide">
                     প্লেয়ার অপশন ও সেটিংস
                   </h3>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowMenu(false)}
-                  className="p-1.5 rounded-full text-stone-400 hover:text-white hover:bg-white/10 transition-colors"
+                  className="p-1.5 rounded-full text-[#777C77] dark:text-[#A4ADA6] hover:text-[#171A18] dark:hover:text-[#F3F4EF] hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
                   aria-label="বন্ধ করুন"
                 >
                   <X className="h-5 w-5" />
@@ -404,12 +403,12 @@ export const FullPlayer: React.FC = () => {
 
               {/* Section 1: Playback Speed */}
               <div className="space-y-2.5">
-                <div className="flex items-center justify-between text-xs font-semibold text-stone-300">
+                <div className="flex items-center justify-between text-xs font-semibold text-[#171A18] dark:text-[#F3F4EF]">
                   <span className="flex items-center gap-1.5">
-                    <Gauge className="h-3.5 w-3.5 text-emerald-400" />
+                    <Gauge className="h-3.5 w-3.5 text-[#176B50] dark:text-[#48A783]" />
                     <span>প্লেব্যাক গতি (Playback Speed)</span>
                   </span>
-                  <span className="text-[11px] text-emerald-400 font-mono font-medium">
+                  <span className="text-[11px] text-[#176B50] dark:text-[#48A783] font-mono font-medium">
                     {toBengaliNumber(playbackRate)}x নির্বাচিত
                   </span>
                 </div>
@@ -424,8 +423,8 @@ export const FullPlayer: React.FC = () => {
                         onClick={() => setPlaybackRate(rate)}
                         className={`py-2 px-1 rounded-xl text-xs font-bold transition-all active:scale-95 text-center ${
                           isSelected
-                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/50 ring-1 ring-emerald-400'
-                            : 'bg-white/10 text-stone-300 hover:bg-white/15 hover:text-white'
+                            ? 'bg-[#176B50] dark:bg-[#48A783] text-white dark:text-[#101713] shadow-md shadow-[#176B50]/25 dark:shadow-[#48A783]/25 ring-1 ring-[#176B50] dark:ring-[#48A783]'
+                            : 'bg-[#F0F1ED] dark:bg-white/10 text-[#777C77] dark:text-[#A4ADA6] hover:bg-[#E6E7E2] dark:hover:bg-white/15 hover:text-[#171A18] dark:hover:text-[#F3F4EF]'
                         }`}
                       >
                         {rate === 1 ? '1x' : `${rate}x`}
@@ -437,17 +436,17 @@ export const FullPlayer: React.FC = () => {
 
               {/* Section 2: Sleep Timer */}
               <div className="space-y-2.5 pt-1">
-                <div className="flex items-center justify-between text-xs font-semibold text-stone-300">
+                <div className="flex items-center justify-between text-xs font-semibold text-[#171A18] dark:text-[#F3F4EF]">
                   <span className="flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5 text-amber-400" />
+                    <Clock className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                     <span>স্লিপ টাইমার (Sleep Timer)</span>
                   </span>
                   {sleepTimerSecondsRemaining ? (
-                    <span className="text-[11px] text-amber-400 font-mono font-medium animate-pulse">
+                    <span className="text-[11px] text-amber-600 dark:text-amber-400 font-mono font-medium animate-pulse">
                       {formatDuration(sleepTimerSecondsRemaining)} বাকি
                     </span>
                   ) : sleepTimerMode === 'end_of_episode' ? (
-                    <span className="text-[11px] text-amber-400 font-medium">
+                    <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
                       বর্তমান পর্বের শেষে
                     </span>
                   ) : null}
@@ -463,8 +462,8 @@ export const FullPlayer: React.FC = () => {
                         onClick={() => setSleepTimer(min)}
                         className={`py-2.5 px-2 rounded-xl text-xs font-medium transition-all active:scale-95 text-center ${
                           isSelected
-                            ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/50 ring-1 ring-amber-400 font-bold'
-                            : 'bg-white/10 text-stone-300 hover:bg-white/15 hover:text-white'
+                            ? 'bg-amber-600 dark:bg-amber-500 text-white shadow-md shadow-amber-900/30 ring-1 ring-amber-500 font-bold'
+                            : 'bg-[#F0F1ED] dark:bg-white/10 text-[#777C77] dark:text-[#A4ADA6] hover:bg-[#E6E7E2] dark:hover:bg-white/15 hover:text-[#171A18] dark:hover:text-[#F3F4EF]'
                         }`}
                       >
                         {toBengaliNumber(min)} মিনিট
@@ -479,8 +478,8 @@ export const FullPlayer: React.FC = () => {
                     onClick={() => setSleepTimer('end_of_episode')}
                     className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-medium transition-all active:scale-95 text-center ${
                       sleepTimerMode === 'end_of_episode'
-                        ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/50 ring-1 ring-amber-400 font-bold'
-                        : 'bg-white/10 text-stone-300 hover:bg-white/15 hover:text-white'
+                        ? 'bg-amber-600 dark:bg-amber-500 text-white shadow-md shadow-amber-900/30 ring-1 ring-amber-500 font-bold'
+                        : 'bg-[#F0F1ED] dark:bg-white/10 text-[#777C77] dark:text-[#A4ADA6] hover:bg-[#E6E7E2] dark:hover:bg-white/15 hover:text-[#171A18] dark:hover:text-[#F3F4EF]'
                     }`}
                   >
                     বর্তমান পর্বের শেষে
@@ -491,8 +490,8 @@ export const FullPlayer: React.FC = () => {
                     onClick={() => cancelSleepTimer()}
                     className={`py-2.5 px-3.5 rounded-xl text-xs font-medium transition-all active:scale-95 ${
                       sleepTimerMode === null
-                        ? 'bg-white/20 text-white font-bold ring-1 ring-white/30'
-                        : 'bg-red-500/20 text-red-300 hover:bg-red-500/30'
+                        ? 'bg-[#E6E7E2] dark:bg-white/20 text-[#171A18] dark:text-white font-bold ring-1 ring-[#D5D7D1] dark:ring-white/30'
+                        : 'bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-300 hover:bg-red-500/20 dark:hover:bg-red-500/30'
                     }`}
                   >
                     টাইমার বন্ধ (Timer Off)
@@ -505,20 +504,20 @@ export const FullPlayer: React.FC = () => {
 
         {/* Queue / Episode List Panel */}
         {showQueue && (
-          <div className="p-4 rounded-2xl bg-stone-900/95 backdrop-blur-xl border border-white/15 space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-150 shadow-2xl">
-            <div className="flex items-center justify-between text-xs font-semibold text-stone-300 border-b border-white/10 pb-2">
+          <div className="p-4 rounded-2xl bg-[#FAFAF8]/95 dark:bg-[#101713]/95 backdrop-blur-xl border border-[#E6E7E2] dark:border-[#233128] space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-150 shadow-2xl">
+            <div className="flex items-center justify-between text-xs font-semibold text-[#171A18] dark:text-[#F3F4EF] border-b border-[#E6E7E2] dark:border-[#233128] pb-2">
               <span>সিরিজের পর্ব তালিকা ({toBengaliNumber(queue.length)})</span>
               <button
                 type="button"
                 onClick={() => setShowQueue(false)}
-                className="text-stone-400 hover:text-white p-1"
+                className="text-[#777C77] dark:text-[#A4ADA6] hover:text-[#171A18] dark:hover:text-[#F3F4EF] p-1 rounded-lg transition-colors"
                 aria-label="বন্ধ করুন"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="max-h-56 overflow-y-auto divide-y divide-white/5 text-xs">
+            <div className="max-h-56 overflow-y-auto divide-y divide-[#E6E7E2] dark:divide-[#233128]/50 text-xs">
               {queue.map((ep, idx) => {
                 const isSelected = ep.id === currentEpisode.id;
                 return (
@@ -527,19 +526,19 @@ export const FullPlayer: React.FC = () => {
                     onClick={() => playEpisode(ep, currentSeries, queue)}
                     className={`py-2 px-2.5 rounded-xl cursor-pointer flex items-center justify-between gap-2 transition-all ${
                       isSelected
-                        ? 'bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 font-semibold'
-                        : 'hover:bg-white/10 text-stone-300'
+                        ? 'bg-[#176B50]/15 dark:bg-[#48A783]/20 border border-[#176B50]/30 dark:border-[#48A783]/40 text-[#176B50] dark:text-[#48A783] font-semibold'
+                        : 'hover:bg-black/5 dark:hover:bg-white/10 text-[#171A18] dark:text-[#F3F4EF]'
                     }`}
                   >
                     <div className="flex items-center gap-2 truncate">
-                      <span className="w-5 text-stone-500 font-mono text-[11px]">
+                      <span className="w-5 text-[#777C77] dark:text-[#A4ADA6] font-mono text-[11px]">
                         {toBengaliNumber(ep.episode_number || idx + 1)}.
                       </span>
                       <span className="truncate">{ep.title}</span>
                     </div>
 
                     {isSelected && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 shrink-0 font-medium">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#176B50]/15 dark:bg-[#48A783]/30 text-[#176B50] dark:text-[#48A783] border border-[#176B50]/20 dark:border-[#48A783]/40 shrink-0 font-medium">
                         বাজছে
                       </span>
                     )}
