@@ -5,29 +5,28 @@ import { Logo } from '../common/Logo';
 
 export const Footer: React.FC = () => {
   return (
-    <footer className="mt-auto w-full border-t border-[#E8EBE7] bg-white dark:border-[#26352C] dark:bg-[#101A14] transition-colors duration-300">
-      <div className="mx-auto flex w-full max-w-7xl flex-col items-center px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+    <footer className="mt-auto w-full border-t border-[#E6E7E2] dark:border-[#233128] bg-transparent transition-colors">
+      <div className="max-w-page mx-auto px-4 sm:px-8 lg:px-12 pt-6 pb-28 sm:py-7">
 
-        {/* Brand */}
-        <Link
-          to="/"
-          aria-label="হিদায়াহ অডিও হোম"
-          className="transition-opacity hover:opacity-80"
-        >
-          <Logo size="sm" />
-        </Link>
+        <div className="flex flex-col items-center gap-3">
+          <Link
+            to="/"
+            aria-label="হিদায়াহ অডিও হোম"
+            className="hover:opacity-80 transition-opacity"
+          >
+            <Logo size="sm" />
+          </Link>
 
-        {/* Description */}
-        <p className="mt-3 max-w-sm text-center text-xs leading-6 text-[#777F78] dark:text-[#A4ADA6] sm:text-sm">
-          সহীহ সুন্নাহর আলোকে নির্বাচিত ধারাবাহিক অডিও ও আলোচনা
-        </p>
+          <p className="max-w-md text-center text-xs sm:text-sm leading-relaxed text-[#777C77] dark:text-[#A4ADA6]">
+            সহীহ সুন্নাহর আলোকে নির্বাচিত ধারাবাহিক অডিও ও আলোচনা
+          </p>
+        </div>
 
-        {/* Copyright */}
-        <div className="mt-5 w-full border-t border-[#EEF0ED] pt-4 text-center dark:border-[#26352C]">
-          <p className="text-[11px] text-[#929A93] dark:text-[#7F8A82] sm:text-xs">
+        <div className="mt-5 border-t border-[#E6E7E2] dark:border-[#233128] pt-4">
+          <p className="text-center text-[11px] sm:text-xs leading-6 text-[#929792] dark:text-[#7F8A82]">
             © {new Date().getFullYear()} Hidayah Audio
-            <span className="mx-2">·</span>
-            "সংগৃহীত অডিও" এর সকল অধিকার সংরক্ষিত। <br className="sm:hidden" />
+            <span className="mx-1">·</span>
+            "সংগৃহীত অডিও" এর সকল অধিকার সংরক্ষিত।
           </p>
         </div>
 
