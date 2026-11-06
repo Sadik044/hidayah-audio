@@ -57,10 +57,10 @@ export const Browse: React.FC = () => {
       {/* Page Header */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#171A18] dark:text-[#F3F4EF]">
-          ক্যাটাগরি ব্রাউজ করুন
+          অডিও লাইব্রেরি
         </h1>
         <p className="text-sm text-[#777C77] dark:text-[#A4ADA6] mt-1">
-          কুরআনের তাফসির, হাদিসের ব্যাখ্যা, ফিকহ ও ধারাবাহিক অডিও লেকচার
+          ইসলামিক অডিও সিরিজ, কুরআনি নসিহত, দোয়া ও জীবনঘনিষ্ঠ শিক্ষার সমাহার।
         </p>
       </div>
 
