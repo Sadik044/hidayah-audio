@@ -17,6 +17,7 @@ import {
   AlertCircle,
   Loader2,
   MoreVertical,
+  RotateCw,
 } from 'lucide-react';
 import { useAudioPlayer, useAudioProgress } from '../../context/AudioPlayerContext';
 import { getCoverImageUrl } from '../../lib/supabase';
@@ -31,6 +32,9 @@ export const FullPlayer: React.FC = () => {
     playbackRate,
     repeatMode,
     error,
+    dismissError,
+    retryPlayback,
+    isRetrying,
     queue,
     playNext,
     playPrevious,
@@ -245,9 +249,33 @@ export const FullPlayer: React.FC = () => {
         {/* Step 4: Seekable Progress Bar with Current Time and Duration */}
         <div className="space-y-1.5 w-full">
           {error && (
-            <div className="mb-2 p-3 rounded-xl bg-red-500/10 dark:bg-red-500/20 border border-red-500/20 dark:border-red-500/30 text-xs text-red-600 dark:text-red-200 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0 text-red-500 dark:text-red-400" />
-              <span>{error}</span>
+            <div className="mb-2 p-2.5 sm:p-3 rounded-xl bg-red-500/10 dark:bg-red-500/20 border border-red-500/20 dark:border-red-500/30 text-xs text-red-700 dark:text-red-200 flex items-center justify-between gap-2 transition-all">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <AlertCircle className="h-4 w-4 shrink-0 text-red-500 dark:text-red-400" />
+                <span className="leading-snug">{error}</span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={retryPlayback}
+                  disabled={isRetrying || isLoadingAudio}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-red-700 dark:text-red-200 bg-red-500/15 hover:bg-red-500/25 active:scale-95 transition-all disabled:opacity-50"
+                  title="পুনরায় চেষ্টা করুন"
+                  aria-label="পুনরায় চেষ্টা করুন"
+                >
+                  <RotateCw className={`h-3 w-3 ${isRetrying ? 'animate-spin' : ''}`} />
+                  <span className="hidden xs:inline">পুনরায় চেষ্টা করুন</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={dismissError}
+                  className="p-1 rounded-lg text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 transition-colors"
+                  title="বার্তা বন্ধ করুন"
+                  aria-label="বার্তা বন্ধ করুন"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           )}
 

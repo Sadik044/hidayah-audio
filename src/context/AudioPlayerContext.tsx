@@ -8,6 +8,11 @@ import {
   registerMediaSessionActions,
   clearMediaSession,
 } from '../lib/mediaSession';
+import {
+  isAbortError,
+  isNotAllowedError,
+  resolveAudioErrorMessage,
+} from '../lib/audioErrors';
 
 export interface RecentlyPlayedItem {
   episode: Episode;
@@ -33,6 +38,9 @@ export interface AudioPlayerContextType {
   playbackRate: number;
   repeatMode: RepeatMode;
   error: string | null;
+  dismissError: () => void;
+  retryPlayback: () => Promise<void>;
+  isRetrying: boolean;
 
   // Queue & Navigation
   queue: Episode[];
@@ -108,6 +116,16 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [playbackRate, setPlaybackRateState] = useState(1);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
   const [error, setError] = useState<string | null>(null);
+  const [isRetrying, setIsRetrying] = useState<boolean>(false);
+
+  // Monotonically increasing request sequence counter to prevent race conditions from rapid episode clicks
+  const playRequestIdRef = useRef<number>(0);
+
+  // Active play() promise reference to prevent unhandled rejections on source switch
+  const playPromiseRef = useRef<Promise<void> | null>(null);
+
+  // Auto-recovery retry counter per episode (max 2 auto-attempts)
+  const retryCountRef = useRef<number>(0);
 
   // Full Player Modal visibility
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
@@ -216,6 +234,8 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     async (episode: Episode, series?: Series | null, newQueue?: Episode[]) => {
       if (!audioRef.current) return;
 
+      const requestId = ++playRequestIdRef.current;
+      retryCountRef.current = 0;
       isClosingRef.current = false;
       setError(null);
       setCurrentEpisode(episode);
@@ -269,15 +289,30 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         } else {
           // Fetch fresh signed URL from the Edge Function
           const res = await getEpisodeAudioUrl(episode.id);
+          if (playRequestIdRef.current !== requestId) return;
+
           if (!res.success || !res.data?.signed_url) {
-            throw new Error(res.error?.message || 'অডিও স্ট্রিম লিংক প্রস্তুত করা সম্ভব হয়নি।');
+            throw new Error(res.error?.message || 'অডিও সার্ভার সাময়িকভাবে সাড়া দিচ্ছে না। কিছুক্ষণ পর আবার চেষ্টা করুন।');
           }
           streamUrl = res.data.signed_url;
           expiresAtMs = now + (res.data.expires_in - 20) * 1000;
           urlCacheRef.current.set(episode.id, { url: streamUrl, expiresAt: expiresAtMs });
         }
 
+        if (playRequestIdRef.current !== requestId || !audioRef.current) return;
+
         signedUrlExpiresAtRef.current = expiresAtMs;
+
+        // If an earlier play() promise is still resolving, safely wait/swallow its interruption
+        if (playPromiseRef.current) {
+          try {
+            await playPromiseRef.current;
+          } catch {
+            // Expected interruption on previous source change
+          }
+        }
+
+        if (playRequestIdRef.current !== requestId || !audioRef.current) return;
 
         audioRef.current.src = streamUrl;
         audioRef.current.defaultPlaybackRate = playbackRateRef.current;
@@ -285,14 +320,35 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         audioRef.current.volume = volumeRef.current;
         audioRef.current.muted = isMutedRef.current;
 
-        await audioRef.current.play();
-        setIsPlaying(true);
+        const promise = audioRef.current.play();
+        playPromiseRef.current = promise;
+        await promise;
+
+        if (playRequestIdRef.current === requestId) {
+          setIsPlaying(true);
+          setError(null);
+        }
       } catch (err) {
-        console.error('Audio playback error:', err);
-        setError(err instanceof Error ? err.message : 'অডিও চালানো সম্ভব হচ্ছে না।');
+        if (playRequestIdRef.current !== requestId) {
+          return;
+        }
+        if (isAbortError(err)) {
+          // Benign interruption by a new load request or rapid switch: do NOT set error
+          return;
+        }
+        if (isNotAllowedError(err)) {
+          setIsPlaying(false);
+          setError('অডিও চালানোর জন্য প্লে বাটনে চাপ দিন।');
+          return;
+        }
+        console.warn('Audio playback error:', err);
+        const friendlyMessage = resolveAudioErrorMessage(err, audioRef.current);
+        setError(friendlyMessage);
         setIsPlaying(false);
       } finally {
-        setIsLoadingAudio(false);
+        if (playRequestIdRef.current === requestId) {
+          setIsLoadingAudio(false);
+        }
       }
     },
     []
@@ -442,22 +498,31 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       if (isClosingRef.current || !stateRef.current.currentEpisode) return;
       const { currentEpisode } = stateRef.current;
 
+      const mediaError = audio.error;
+      // Code 1 is MEDIA_ERR_ABORTED - expected when unloading or switching
+      if (mediaError?.code === 1) return;
+
       // Automated URL recovery retry if URL expired or experienced a transient network glitch
-      if (currentEpisode && !isRetryingRef.current && signedUrlExpiresAtRef.current > 0) {
+      if (currentEpisode && !isRetryingRef.current && retryCountRef.current < 2) {
         isRetryingRef.current = true;
+        retryCountRef.current += 1;
         try {
           setIsLoadingAudio(true);
+          urlCacheRef.current.delete(currentEpisode.id);
           const freshUrl = await refreshStreamUrl(currentEpisode.id);
           const resumeTime = audio.currentTime;
           audio.src = freshUrl;
           audio.currentTime = resumeTime;
-          await audio.play();
+          const promise = audio.play();
+          playPromiseRef.current = promise;
+          await promise;
           setIsPlaying(true);
           setError(null);
           isRetryingRef.current = false;
           return;
         } catch (retryErr) {
-          console.error('Audio auto-recovery retry failed:', retryErr);
+          if (isAbortError(retryErr)) return;
+          console.warn('Audio auto-recovery retry failed:', retryErr);
         } finally {
           setIsLoadingAudio(false);
           isRetryingRef.current = false;
@@ -467,7 +532,9 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setIsLoadingAudio(false);
       setIsPlaying(false);
       updateMediaSessionPlaybackState('paused');
-      setError('অডিও লোড করতে সমস্যা হয়েছে। পুনরায় চেষ্টা করুন।');
+
+      const friendlyMessage = resolveAudioErrorMessage(mediaError, audio);
+      setError(friendlyMessage);
     };
 
     audio.addEventListener('play', onPlay);
@@ -541,16 +608,31 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
           audioRef.current.muted = isMutedRef.current;
         } catch (e) {
           console.warn('URL refresh warning:', e);
+          const friendlyMessage = resolveAudioErrorMessage(e, audioRef.current);
+          setError(friendlyMessage);
+          setIsLoadingAudio(false);
+          return;
         } finally {
           setIsLoadingAudio(false);
         }
       }
 
       try {
-        await audioRef.current.play();
+        setError(null);
+        const promise = audioRef.current.play();
+        playPromiseRef.current = promise;
+        await promise;
         setIsPlaying(true);
       } catch (err) {
-        console.error('Play resumed error:', err);
+        if (isAbortError(err)) return;
+        if (isNotAllowedError(err)) {
+          setIsPlaying(false);
+          setError('অডিও চালানোর জন্য প্লে বাটনে চাপ দিন।');
+          return;
+        }
+        console.warn('Play resumed error:', err);
+        const friendlyMessage = resolveAudioErrorMessage(err, audioRef.current);
+        setError(friendlyMessage);
         setIsPlaying(false);
       }
     }
@@ -577,11 +659,14 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setCurrentTime(clamped);
         updateMediaSessionPositionState(clamped, durationRef.current, audioRef.current.playbackRate);
         if (stateRef.current.isPlaying) {
-          await audioRef.current.play();
+          const promise = audioRef.current.play();
+          playPromiseRef.current = promise;
+          await promise;
         }
       } catch (err) {
-        console.error('Seek URL refresh error:', err);
-        setError('অডিও লিংক মেয়াদোত্তীর্ণ হয়েছে। পুনরায় লোড করতে ব্যর্থ হয়েছে।');
+        if (isAbortError(err)) return;
+        console.warn('Seek URL refresh error:', err);
+        setError('অডিও লিংক নতুন করে তৈরি করে পুনরায় চালানোর চেষ্টা করুন।');
       } finally {
         setIsLoadingAudio(false);
       }
@@ -772,6 +857,9 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const closePlayer = useCallback(() => {
     isClosingRef.current = true;
+    playRequestIdRef.current++;
+    retryCountRef.current = 0;
+    playPromiseRef.current = null;
     stateRef.current.currentEpisode = null;
     stateRef.current.currentSeries = null;
     stateRef.current.isPlaying = false;
@@ -791,6 +879,67 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     cancelSleepTimer();
     setIsFullPlayerOpen(false);
   }, [cancelSleepTimer]);
+
+  const dismissError = useCallback(() => {
+    setError(null);
+  }, []);
+
+  const retryPlayback = useCallback(async () => {
+    const { currentEpisode } = stateRef.current;
+    if (!audioRef.current || !currentEpisode) return;
+
+    const requestId = ++playRequestIdRef.current;
+    setError(null);
+    setIsRetrying(true);
+    setIsLoadingAudio(true);
+
+    try {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        setError('অডিও লোড করা যাচ্ছে না। আপনার ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।');
+        return;
+      }
+
+      urlCacheRef.current.delete(currentEpisode.id);
+      const freshUrl = await refreshStreamUrl(currentEpisode.id);
+
+      if (playRequestIdRef.current !== requestId || !audioRef.current) return;
+
+      const resumeTime = audioRef.current.currentTime || 0;
+      audioRef.current.src = freshUrl;
+      audioRef.current.currentTime = resumeTime;
+      audioRef.current.defaultPlaybackRate = playbackRateRef.current;
+      audioRef.current.playbackRate = playbackRateRef.current;
+      audioRef.current.volume = volumeRef.current;
+      audioRef.current.muted = isMutedRef.current;
+
+      const promise = audioRef.current.play();
+      playPromiseRef.current = promise;
+      await promise;
+
+      if (playRequestIdRef.current === requestId) {
+        setIsPlaying(true);
+        setError(null);
+        retryCountRef.current = 0;
+      }
+    } catch (err) {
+      if (playRequestIdRef.current !== requestId) return;
+      if (isAbortError(err)) return;
+      if (isNotAllowedError(err)) {
+        setIsPlaying(false);
+        setError('অডিও চালানোর জন্য প্লে বাটনে চাপ দিন।');
+        return;
+      }
+      console.warn('Manual retry playback failed:', err);
+      const friendlyMessage = resolveAudioErrorMessage(err, audioRef.current);
+      setError(friendlyMessage);
+      setIsPlaying(false);
+    } finally {
+      if (playRequestIdRef.current === requestId) {
+        setIsRetrying(false);
+        setIsLoadingAudio(false);
+      }
+    }
+  }, [refreshStreamUrl]);
 
   const toggleFavorite = useCallback((episodeId: string) => {
     setFavorites((prev) => {
@@ -825,6 +974,9 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     playbackRate,
     repeatMode,
     error,
+    dismissError,
+    retryPlayback,
+    isRetrying,
 
     queue,
     queueIndex,
@@ -867,6 +1019,9 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     playbackRate,
     repeatMode,
     error,
+    dismissError,
+    retryPlayback,
+    isRetrying,
     queue,
     queueIndex,
     hasNext,

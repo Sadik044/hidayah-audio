@@ -11,6 +11,7 @@ import {
   Loader2,
   Maximize2,
   Clock,
+  RotateCw,
 } from 'lucide-react';
 import { useAudioPlayer, useAudioProgress } from '../../context/AudioPlayerContext';
 import { getCoverImageUrl } from '../../lib/supabase';
@@ -25,6 +26,9 @@ export const MiniPlayer: React.FC = () => {
     volume,
     isMuted,
     error,
+    dismissError,
+    retryPlayback,
+    isRetrying,
     togglePlay,
     seek,
     setVolume,
@@ -73,10 +77,32 @@ export const MiniPlayer: React.FC = () => {
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border-b border-red-500/20 px-4 py-1 text-xs text-red-600 dark:text-red-400 flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <AlertCircle className="h-3.5 w-3.5" />
-            <span>{error}</span>
+        <div className="bg-red-500/10 dark:bg-red-500/15 border-b border-red-500/20 px-3 sm:px-4 py-1.5 text-xs text-red-700 dark:text-red-300 flex items-center justify-between gap-2 transition-all">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0 text-red-500 dark:text-red-400" />
+            <span className="truncate">{error}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={retryPlayback}
+              disabled={isRetrying || isLoadingAudio}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium text-red-700 dark:text-red-200 bg-red-500/15 hover:bg-red-500/25 active:scale-95 transition-all disabled:opacity-50"
+              title="পুনরায় চেষ্টা করুন"
+              aria-label="পুনরায় চেষ্টা করুন"
+            >
+              <RotateCw className={`h-3 w-3 ${isRetrying ? 'animate-spin' : ''}`} />
+              <span className="hidden xs:inline">পুনরায় চেষ্টা করুন</span>
+            </button>
+            <button
+              type="button"
+              onClick={dismissError}
+              className="p-0.5 rounded text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 transition-colors"
+              title="বার্তা বন্ধ করুন"
+              aria-label="বার্তা বন্ধ করুন"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       )}

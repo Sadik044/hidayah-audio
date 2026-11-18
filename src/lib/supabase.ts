@@ -67,17 +67,23 @@ function mapAudioErrorCodeToBangla(code?: string, defaultMsg?: string): string {
     case 'UNAUTHORIZED':
       return 'অডিও সার্ভারে প্রমাণীকরণ ব্যর্থ হয়েছে। পুনরায় লগইন করুন।';
     case 'NOT_FOUND':
-      return 'অনুরোধকৃত অডিও পর্বটি খুঁজে পাওয়া যায়নি।';
     case 'AUDIO_NOT_FOUND':
-      return 'এই পর্বের জন্য কোনো অডিও ফাইল সংযুক্ত করা হয়নি।';
+      return 'এই অডিওটি বর্তমানে পাওয়া যাচ্ছে না।';
     case 'STORAGE_ERROR':
       return 'নিরাপদ অডিও স্ট্রিম লিঙ্ক তৈরিতে সমস্যা হয়েছে।';
+    case 'EXPIRED_URL':
+      return 'অডিও লিংক নতুন করে তৈরি করে পুনরায় চালানোর চেষ্টা করুন।';
+    case 'UNSUPPORTED_FORMAT':
+      return 'এই অডিও ফরম্যাটটি আপনার ব্রাউজারে চালানো যাচ্ছে না।';
     case 'INVALID_INPUT':
       return 'সঠিক পর্ব আইডি পাওয়া যায়নি।';
     case 'METHOD_NOT_ALLOWED':
       return 'অনুরোধ পদ্ধতি সমর্থিত নয়।';
     default:
-      return defaultMsg || 'অডিও লিঙ্ক প্রস্তুত করা সম্ভব হচ্ছে না। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।';
+      if (defaultMsg && /[\u0980-\u09FF]/.test(defaultMsg)) {
+        return defaultMsg;
+      }
+      return 'অডিও সার্ভার সাময়িকভাবে সাড়া দিচ্ছে না। কিছুক্ষণ পর আবার চেষ্টা করুন।';
   }
 }
 
@@ -85,26 +91,61 @@ function mapAudioErrorCodeToBangla(code?: string, defaultMsg?: string): string {
  * Fetches a temporary signed stream URL for an episode from the get-audio-url edge function.
  */
 export async function getEpisodeAudioUrl(episodeId: string): Promise<AudioUrlResponse> {
+  // Check if client device is offline
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return {
+      success: false,
+      error: {
+        code: 'NETWORK_ERROR',
+        message: 'অডিও লোড করা যাচ্ছে না। আপনার ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।',
+      },
+    };
+  }
+
   try {
     const { data, error } = await supabase.functions.invoke<AudioUrlResponse>('get-audio-url', {
       body: { episode_id: episodeId },
     });
 
     if (error) {
-      let friendlyMessage = 'অডিও সার্ভারের সাথে যোগাযোগ করা যায়নি।';
-      let errorCode = 'FUNCTION_ERROR';
+      // Check if this was a network disconnection
+      const isNetwork =
+        (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+        /fetch|network/i.test(error.message || '');
+      if (isNetwork) {
+        return {
+          success: false,
+          error: {
+            code: 'NETWORK_ERROR',
+            message: 'অডিও লোড করা যাচ্ছে না। আপনার ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।',
+          },
+        };
+      }
+
+      let friendlyMessage = 'অডিও সার্ভার সাময়িকভাবে সাড়া দিচ্ছে না। কিছুক্ষণ পর আবার চেষ্টা করুন।';
+      let errorCode = 'SERVER_ERROR';
 
       // Check if error has context response from edge function
       const errContext = (error as { context?: Response }).context;
-      if (errContext && typeof errContext.json === 'function') {
-        try {
-          const body = await errContext.json();
-          if (body?.error?.code) {
-            errorCode = body.error.code;
-            friendlyMessage = mapAudioErrorCodeToBangla(body.error.code, body.error.message);
+      if (errContext) {
+        if (errContext.status === 404) {
+          friendlyMessage = 'এই অডিওটি বর্তমানে পাওয়া যাচ্ছে না।';
+          errorCode = 'NOT_FOUND';
+        } else if (errContext.status >= 500) {
+          friendlyMessage = 'অডিও সার্ভার সাময়িকভাবে সাড়া দিচ্ছে না। কিছুক্ষণ পর আবার চেষ্টা করুন।';
+          errorCode = 'SERVER_ERROR';
+        }
+
+        if (typeof errContext.json === 'function') {
+          try {
+            const body = await errContext.json();
+            if (body?.error?.code) {
+              errorCode = body.error.code;
+              friendlyMessage = mapAudioErrorCodeToBangla(body.error.code, body.error.message);
+            }
+          } catch {
+            // Keep status-based message if JSON parsing fails
           }
-        } catch {
-          // Use default error message if JSON parsing fails
         }
       }
 
@@ -130,11 +171,16 @@ export async function getEpisodeAudioUrl(episodeId: string): Promise<AudioUrlRes
 
     return data;
   } catch (err) {
+    const isNetwork =
+      (typeof navigator !== 'undefined' && navigator.onLine === false) ||
+      (err instanceof Error && /fetch|network/i.test(err.message));
     return {
       success: false,
       error: {
-        code: 'NETWORK_ERROR',
-        message: err instanceof Error ? err.message : 'অপ্রত্যাশিত নেটওয়ার্ক ত্রুটি ঘটেছে।',
+        code: isNetwork ? 'NETWORK_ERROR' : 'SERVER_ERROR',
+        message: isNetwork
+          ? 'অডিও লোড করা যাচ্ছে না। আপনার ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।'
+          : 'অডিও সার্ভার সাময়িকভাবে সাড়া দিচ্ছে না। কিছুক্ষণ পর আবার চেষ্টা করুন।',
       },
     };
   }
